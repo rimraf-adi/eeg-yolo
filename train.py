@@ -8,7 +8,7 @@ import random
 from yolo1d import yolo_1d_v11_n
 from dataset import EEGRegressionDataset
 
-def train(data_dir, anno_dir, epochs=5, batch_size=16, lr=1e-3, results_file="results.txt"):
+def train(data_dir, anno_dir, epochs=50, batch_size=16, lr=1e-3, patience=5, results_file="results.txt"):
     EEG_IDX = [1, 4, 5, 7, 9, 11, 13, 14, 15, 16, 17, 19, 20, 21, 22, 25, 31, 34,
                36, 38, 39, 40, 41, 44, 47, 50, 51, 52, 62, 63, 66, 67, 69, 73, 75,
                76, 77, 78, 79]
@@ -52,6 +52,9 @@ def train(data_dir, anno_dir, epochs=5, batch_size=16, lr=1e-3, results_file="re
     optimizer = optim.AdamW(model.parameters(), lr=lr)
     criterion = nn.MSELoss()
 
+    best_val_loss = float('inf')
+    epochs_no_improve = 0
+
     for epoch in range(1, epochs + 1):
         model.train()
         train_loss = 0.0
@@ -84,9 +87,26 @@ def train(data_dir, anno_dir, epochs=5, batch_size=16, lr=1e-3, results_file="re
             val_loss /= len(val_loader)
         
         log_line = f"Epoch {epoch}/{epochs}: Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}"
+        
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            epochs_no_improve = 0
+            torch.save(model.state_dict(), "best_model.pt")
+            log_line += " -> BEST! Saved weights to best_model.pt"
+        else:
+            epochs_no_improve += 1
+            log_line += f" -> [No improvement: {epochs_no_improve}/{patience}]"
+
         print(log_line)
         with open(results_file, "a") as f:
             f.write(log_line + "\n")
+            
+        if epochs_no_improve >= patience:
+            msg = f"\nEarly stopping triggered. Best Validation Loss: {best_val_loss:.4f}."
+            print(msg)
+            with open(results_file, "a") as f:
+                f.write(msg + "\n")
+            break
 
     with open(results_file, "a") as f:
         f.write(f"\nTraining completed.\n")
@@ -96,7 +116,7 @@ if __name__ == '__main__':
     train(
         data_dir='/Volumes/WORKSPACE/neonatal',
         anno_dir='/Volumes/WORKSPACE/dense_annotations_neonatal',
-        epochs=3,
+        epochs=50,
         batch_size=8,
         results_file='results.txt'
     )
