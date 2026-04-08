@@ -26,7 +26,12 @@ class EEGRegressionDataset(Dataset):
         self.S = int(S)
         self.cell_duration = self.window_size_sec / self.S
         
-        self.window_samples = int(self.window_size_sec * self.fs)
+        # Exact mathematical samples mapped internally
+        raw_samples = int(self.window_size_sec * self.fs)
+        
+        # PyTorch YOLO FPN inherently halves sizes across 5 pooling stages (2^5 = 32 grids). 
+        # Sequences must natively align mathematically strictly maintaining multiples of 32 to skip tensor dimension crashes!
+        self.window_samples = int(math.ceil(raw_samples / 32) * 32)
         self.stride_samples = int(self.stride_sec * self.fs)
         
         # 1. Global Setup

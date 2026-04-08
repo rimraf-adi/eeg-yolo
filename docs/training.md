@@ -59,3 +59,53 @@ Assign the calculated values to $Y$ at index $i$. The vector structure at $Y[i, 
 * **Grid Collisions:** If two events fall into the exact same grid index $i$ within the same window, overwrite the older event with the newer event, but print a console warning: `"Warning: Grid collision detected at index {i}. Consider increasing S."`
 * **Empty Background Windows:** If a window contains no annotations, $Y$ remains a tensor of pure zeros. The dataset must yield this successfully without throwing errors, as background training is critical.
 * **Return Format:** The `__getitem__` method of the Dataset must return a tuple: `(X_tensor, Y_tensor)`.
+Because we simplified your architecture to a **Point-Only 1D YOLO** by dropping the duration of events, standard computer vision metrics like **IoU (Intersection over Union) will no longer work**. You cannot calculate the overlap of two infinitely small points.
+
+Instead, your evaluation pipeline must be based on **Temporal Tolerance**. You will evaluate how close your predicted points are to the ground truth points, and whether the network assigned the correct class to them.
+
+Here are the specific evaluation metrics you need to implement for this model.
+
+---
+
+### 1. The Foundation: Temporal Tolerance ($\tau$)
+
+Before calculating any standard metrics, you must define a "hit window" or temporal tolerance ($\tau$). This is the maximum acceptable distance (in seconds or milliseconds) between a predicted point and a ground truth point for it to be considered a successful detection.
+
+For EEG spikes, a common tolerance is **100ms to 250ms**. 
+
+Based on this tolerance, you classify every prediction as follows:
+* **True Positive (TP):** The model predicts an event within $\pm \tau$ of a ground truth event, AND the class (e.g., `!`) matches.
+* **False Positive (FP):** The model predicts an event, but there is no ground truth event within $\pm \tau$, OR the model predicts multiple events for a single ground truth event (duplicates).
+* **False Negative (FN):** There is a ground truth event, but the model failed to predict anything within $\pm \tau$.
+
+---
+
+### 2. Primary Metrics: Precision, Recall, and F1-Score
+
+Because EEG data is highly imbalanced (hours of empty signal with only occasional spikes), you should completely ignore overall "Accuracy." Instead, focus on these three metrics for each of your 5 classes:
+
+* **Precision:** When your model fires a detection, how often is it actually right? High precision means very few false alarms.
+    $$Precision = \frac{TP}{TP + FP}$$
+* **Recall (Sensitivity):** Out of all the real events in the EEG, how many did your model successfully find? High recall means very few missed spikes.
+    $$Recall = \frac{TP}{TP + FN}$$
+* **F1-Score:** The harmonic mean of precision and recall. This is your best single-number indicator of how well the model is performing on a specific class.
+    $$F_1 = 2 \times \frac{Precision \times Recall}{Precision + Recall}$$
+
+### 3. The YOLO Standard: 1D mAP (Mean Average Precision)
+
+To evaluate the overall health of your YOLO network across different confidence thresholds, you will use **mAP**. 
+
+In standard YOLO, this is often "mAP@0.5" (meaning IoU > 0.5). For your 1D network, it will be **mAP@$\tau$** (e.g., mAP@0.25s).
+
+1.  **Average Precision (AP) per Class:** You plot a Precision-Recall curve by gradually lowering the network's confidence threshold ($p_c$) from $1.0$ down to $0.0$. The AP is the area under this curve. 
+2.  **mAP:** You calculate the AP for `!`, `!start`, `!end`, `Waking`, and `Sleeping`, and then take the mean of those 5 values.
+
+### 4. Classification Confusion Matrix
+
+Sometimes the network will perfectly predict the exact millisecond an event occurs (a localization True Positive), but it will guess the wrong class (e.g., it sees a `!start` but labels it as a `!`). 
+
+To track this, you should generate a standard $5 \times 5$ confusion matrix. You only populate this matrix with events that fell inside your temporal tolerance ($\tau$). This will instantly tell you if the network is struggling to distinguish between a single spike (`!`) and the start of a continuous discharge (`!start`).
+
+---
+
+Have you determined how tightly a clinician needs these events localized—in other words, what should your temporal tolerance window ($\tau$) be set to for a "correct" detection?

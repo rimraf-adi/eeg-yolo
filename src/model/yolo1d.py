@@ -193,29 +193,37 @@ class DarkFPN(torch.nn.Module):
         p5 = self.h6(torch.cat(tensors=[self.h5(p4), p5], dim=1))
         return p3, p4, p5
 
-class RegressionHead(torch.nn.Module):
-    def __init__(self, filters=()):
+class SequentialYoloHead(torch.nn.Module):
+    def __init__(self, filters=(), S=100, num_classes=3):
         super().__init__()
-        self.pool = torch.nn.AdaptiveAvgPool1d(1)
+        self.S = S
         self.ch = sum(filters)
-        self.fc = torch.nn.Sequential(
-            torch.nn.Linear(self.ch, self.ch // 2),
-            torch.nn.SiLU(),
-            torch.nn.Linear(self.ch // 2, 3) # [start_time, end_time, label]
-        )
-
+        
+        # Geometrically map varying temporal resolutions smoothly onto S=100 grid mapping bounds
+        self.pool = torch.nn.AdaptiveAvgPool1d(self.S)
+        
+        # Condense exactly into the Object Mapping tensor: [Objectness, Offset, C1, C2, C3]
+        self.conv = torch.nn.Conv1d(in_channels=self.ch, out_channels=2 + num_classes, kernel_size=1)
+        
     def forward(self, x):
-        # x is a list of [p3, p4, p5]
-        pooled = [self.pool(f).view(f.size(0), -1) for f in x]
-        features = torch.cat(pooled, dim=1)
-        return self.fc(features)
+        # x is a list of [p3, p4, p5] mapped onto uniform dimensions
+        pooled = [self.pool(f) for f in x]
+        features = torch.cat(pooled, dim=1) # [B, sum(filters), S=100]
+        
+        out = self.conv(features)           # [B, 5, S=100]
+        
+        # Permute dynamically to [Batch, 100, 1, 5] strictly matching dataset `Y` targets natively
+        out = out.transpose(1, 2).unsqueeze(2)
+        
+        # Sigmoidal squish universally applies spatial 0.0 - 1.0 constraints ensuring predictions never map boundaries out-of-scale
+        return torch.sigmoid(out)
 
 class YOLO(torch.nn.Module):
     def __init__(self, width, depth, csp):
         super().__init__()
         self.net = DarkNet(width, depth, csp)
         self.fpn = DarkFPN(width, depth, csp)
-        self.head = RegressionHead((width[3], width[4], width[5]))
+        self.head = SequentialYoloHead((width[3], width[4], width[5]))
 
     def forward(self, x):
         x = self.net(x)

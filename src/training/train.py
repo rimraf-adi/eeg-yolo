@@ -14,29 +14,94 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 from src.model.yolo1d import yolo_1d_v11_n
 from src.training.dataset import EEGRegressionDataset
 
-def calc_metrics(y_true, y_pred, p=18):
+def yolo_loss(preds, targets):
     """
-    Computes regression metrics across all batched targets.
-    p relates to number of input features (channels=18) for Adjusted R2.
+    Computes spatially optimized YOLO bounding losses natively spanning [B, 100, 1, 5] tensor allocations.
     """
-    mae = np.mean(np.abs(y_true - y_pred))
-    mse = np.mean(np.square(y_true - y_pred))
-    rmse = np.sqrt(mse)
+    obj_mask = targets[..., 0] == 1.0
     
-    # Calculate R2
-    ss_res = np.sum(np.square(y_true - y_pred), axis=0)
-    ss_tot = np.sum(np.square(y_true - np.mean(y_true, axis=0)), axis=0)
+    bce = nn.BCELoss(reduction='mean')
+    mse = nn.MSELoss(reduction='mean')
     
-    r2_per_target = np.ones_like(ss_res)
-    nonzero = ss_tot != 0
-    r2_per_target[nonzero] = 1 - (ss_res[nonzero] / ss_tot[nonzero])
-    r2 = np.mean(r2_per_target)
+    # 1. Objectness Loss (Evaluated across the entire grid universally)
+    loss_obj = bce(preds[..., 0], targets[..., 0])
     
-    # Calculate Adjusted R2
-    n = len(y_true)
-    adj_r2 = 1 - (1 - r2) * (n - 1) / (n - p - 1) if n > p + 1 else r2
+    # 2. Offset Loss & 3. Class Loss (Evaluated ONLY exactly where Events physically sit)
+    if obj_mask.sum() > 0:
+        loss_box = mse(preds[..., 1][obj_mask], targets[..., 1][obj_mask])
+        loss_cls = bce(preds[..., 2:5][obj_mask], targets[..., 2:5][obj_mask])
+    else:
+        loss_box = torch.tensor(0.0, device=preds.device)
+        loss_cls = torch.tensor(0.0, device=preds.device)
+        
+    return loss_obj, loss_box, loss_cls
+
+def extract_events_from_grid(tensor, conf_threshold=0.5, cell_duration=0.1):
+    """
+    Dynamically reconstructs discrete temporal occurrences from a dense 1D structural grid.
+    Returns: List of events per batch sample -> [[{'time': t, 'class': c, 'conf': p_c}, ...], ...]
+    """
+    B, S = tensor.size(0), tensor.size(1)
+    batch_events = []
     
-    return r2, adj_r2, mae, rmse
+    for b in range(B):
+        events = []
+        for i in range(S):
+            p_c = tensor[b, i, 0, 0].item()
+            if p_c >= conf_threshold:
+                t_x = tensor[b, i, 0, 1].item()
+                # Determine absolute class classification natively logic
+                cls_probs = tensor[b, i, 0, 2:5]
+                class_id = torch.argmax(cls_probs).item()
+                
+                time_rel = (i * cell_duration) + (t_x * cell_duration)
+                events.append({'time': time_rel, 'class': class_id, 'conf': p_c})
+        batch_events.append(events)
+    return batch_events
+
+def calc_temporal_metrics(preds_tensor, trues_tensor, tau=0.25):
+    """
+    Computes TP, FP, and FN structurally bypassing generic 2D mapping overlapping dependencies (IoU).
+    Instead, calculates point precision natively applying explicit temporal bound matching.
+    """
+    # 1. Reconstruct discrete timestamp items organically natively parsing grid
+    pred_batch = extract_events_from_grid(preds_tensor, conf_threshold=0.5)
+    true_batch = extract_events_from_grid(trues_tensor, conf_threshold=0.5) # Ground truth exactly outputs p_c = 1.0!
+    
+    tp_total, fp_total, fn_total = 0, 0, 0
+    
+    for preds, trues in zip(pred_batch, true_batch):
+        matched_preds = set()
+        matched_trues = set()
+        
+        # Sort predictions prioritizing tracking structurally by confidence locally
+        preds = sorted(preds, key=lambda x: x['conf'], reverse=True)
+        
+        for p_idx, p in enumerate(preds):
+            best_dist = float('inf')
+            best_t_idx = -1
+            
+            for t_idx, t in enumerate(trues):
+                if t_idx in matched_trues:
+                    continue
+                if p['class'] != t['class']: # Class MUST be identical dynamically aligning exactly
+                    continue
+                
+                dist = abs(p['time'] - t['time'])
+                if dist <= tau and dist < best_dist:
+                    best_dist = dist
+                    best_t_idx = t_idx
+            
+            if best_t_idx != -1:
+                # Valid TP structurally connected locally!
+                tp_total += 1
+                matched_preds.add(p_idx)
+                matched_trues.add(best_t_idx)
+                
+        fp_total += (len(preds) - len(matched_preds))
+        fn_total += (len(trues) - len(matched_trues))
+        
+    return tp_total, fp_total, fn_total
 
 def train(data_dir, anno_dir, epochs=50, batch_size=16, lr=1e-3, patience=5, results_file="results.txt"):
     # We natively isolated the dataset strictly from P001 to P082!
@@ -87,7 +152,6 @@ def train(data_dir, anno_dir, epochs=50, batch_size=16, lr=1e-3, patience=5, res
 
     model = yolo_1d_v11_n(in_channels=18).to(device)
     optimizer = optim.AdamW(model.parameters(), lr=lr)
-    criterion = nn.MSELoss()
 
     best_val_loss = float('inf')
     epochs_no_improve = 0
@@ -95,9 +159,9 @@ def train(data_dir, anno_dir, epochs=50, batch_size=16, lr=1e-3, patience=5, res
     for epoch in range(1, epochs + 1):
         model.train()
         train_loss = 0.0
-        
-        train_trues = []
-        train_preds = []
+        train_obj = 0.0
+        train_box = 0.0
+        train_cls = 0.0
         
         pbar = tqdm(train_loader, desc=f"Epoch {epoch}/{epochs} Train")
         for x, y in pbar:
@@ -105,51 +169,69 @@ def train(data_dir, anno_dir, epochs=50, batch_size=16, lr=1e-3, patience=5, res
             
             optimizer.zero_grad()
             preds = model(x)
-            loss = criterion(preds, y)
+            
+            l_obj, l_box, l_cls = yolo_loss(preds, y)
+            
+            # YOLO weighted heuristic: object detection logic dominates bounding offset shifts
+            loss = 5.0 * l_obj + l_box + l_cls
+            
             loss.backward()
             optimizer.step()
             
             train_loss += loss.item()
+            train_obj += l_obj.item()
+            train_box += l_box.item()
+            train_cls += l_cls.item()
             
-            # Detach for metric computations later
-            train_trues.append(y.detach().cpu().numpy())
-            train_preds.append(preds.detach().cpu().numpy())
+            pbar.set_postfix({'loss': f"{loss.item():.4f}", 'obj': f"{l_obj.item():.4f}"})
             
-            pbar.set_postfix({'loss': loss.item()})
-            
-        train_loss /= len(train_loader)
-        
-        # Calculate train metrics mapping outputs globally
-        train_trues = np.vstack(train_trues)
-        train_preds = np.vstack(train_preds)
-        train_r2, train_adj_r2, train_mae, train_rmse = calc_metrics(train_trues, train_preds)
+        n_train = len(train_loader)
+        train_loss /= n_train
+        train_obj /= n_train
+        train_box /= n_train
+        train_cls /= n_train
         
         model.eval()
         val_loss = 0.0
-        val_trues = []
-        val_preds = []
+        val_obj = 0.0
+        val_box = 0.0
+        val_cls = 0.0
+        val_tp = 0
+        val_fp = 0
+        val_fn = 0
         
         with torch.no_grad():
             for x, y in val_loader:
                 x, y = x.to(device), y.to(device)
                 preds = model(x)
-                loss = criterion(preds, y)
-                val_loss += loss.item()
                 
-                val_trues.append(y.cpu().numpy())
-                val_preds.append(preds.cpu().numpy())
+                l_obj, l_box, l_cls = yolo_loss(preds, y)
+                loss = 5.0 * l_obj + l_box + l_cls
+                
+                val_loss += loss.item()
+                val_obj += l_obj.item()
+                val_box += l_box.item()
+                val_cls += l_cls.item()
+                
+                tp, fp, fn = calc_temporal_metrics(preds, y, tau=0.25)
+                val_tp += tp
+                val_fp += fp
+                val_fn += fn
                 
         if len(val_loader) > 0:
-            val_loss /= len(val_loader)
-            val_trues = np.vstack(val_trues)
-            val_preds = np.vstack(val_preds)
-            val_r2, val_adj_r2, val_mae, val_rmse = calc_metrics(val_trues, val_preds)
-        else:
-            val_r2, val_adj_r2, val_mae, val_rmse = 0.0, 0.0, 0.0, 0.0
+            n_val = len(val_loader)
+            val_loss /= n_val
+            val_obj /= n_val
+            val_box /= n_val
+            val_cls /= n_val
+            
+        precision = val_tp / (val_tp + val_fp) if (val_tp + val_fp) > 0 else 0.0
+        recall = val_tp / (val_tp + val_fn) if (val_tp + val_fn) > 0 else 0.0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
         
         log_line = (f"Epoch {epoch}/{epochs}:\n"
-                    f"  [Train] Loss={train_loss:.4f} | R²={train_r2:.4f} | Adj-R²={train_adj_r2:.4f} | MAE={train_mae:.4f} | RMSE={train_rmse:.4f}\n"
-                    f"  [Val]   Loss={val_loss:.4f}   | R²={val_r2:.4f}   | Adj-R²={val_adj_r2:.4f}   | MAE={val_mae:.4f}   | RMSE={val_rmse:.4f}\n")
+                    f"  [Train] Loss={train_loss:.4f} | Obj={train_obj:.4f}\n"
+                    f"  [Val]   Loss={val_loss:.4f} | F1={f1:.4f} | P={precision:.4f} | R={recall:.4f}\n")
         
         if val_loss < best_val_loss:
             best_val_loss = val_loss
@@ -190,34 +272,53 @@ def train(data_dir, anno_dir, epochs=50, batch_size=16, lr=1e-3, patience=5, res
     model.eval()
     
     test_loss = 0.0
-    test_trues = []
-    test_preds = []
+    test_obj = 0.0
+    test_box = 0.0
+    test_cls = 0.0
+    test_tp = 0
+    test_fp = 0
+    test_fn = 0
     
     with torch.no_grad():
         for x, y in test_loader:
             x, y = x.to(device), y.to(device)
             preds = model(x)
-            loss = criterion(preds, y)
-            test_loss += loss.item()
             
-            test_trues.append(y.cpu().numpy())
-            test_preds.append(preds.cpu().numpy())
+            l_obj, l_box, l_cls = yolo_loss(preds, y)
+            loss = 5.0 * l_obj + l_box + l_cls
+            
+            test_loss += loss.item()
+            test_obj += l_obj.item()
+            test_box += l_box.item()
+            test_cls += l_cls.item()
+            
+            tp, fp, fn = calc_temporal_metrics(preds, y, tau=0.25)
+            test_tp += tp
+            test_fp += fp
+            test_fn += fn
             
     if len(test_loader) > 0:
-        test_loss /= len(test_loader)
-        test_trues = np.vstack(test_trues)
-        test_preds = np.vstack(test_preds)
-        test_r2, test_adj_r2, test_mae, test_rmse = calc_metrics(test_trues, test_preds)
-    else:
-        test_r2, test_adj_r2, test_mae, test_rmse = 0.0, 0.0, 0.0, 0.0
+        n_test = len(test_loader)
+        test_loss /= n_test
+        test_obj /= n_test
+        test_box /= n_test
+        test_cls /= n_test
         
-    test_msg = (f"\n--- TEST SET METRICS ---\n"
-                f"Loss:   {test_loss:.4f}\n"
-                f"R²:     {test_r2:.4f}\n"
-                f"Adj-R²: {test_adj_r2:.4f}\n"
-                f"MAE:    {test_mae:.4f}\n"
-                f"RMSE:   {test_rmse:.4f}\n"
-                f"------------------------\n")
+    precision = test_tp / (test_tp + test_fp) if (test_tp + test_fp) > 0 else 0.0
+    recall = test_tp / (test_tp + test_fn) if (test_tp + test_fn) > 0 else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+        
+    test_msg = (f"\n--- TEST SET TEMPORAL METRICS (tau=0.25s) ---\n"
+                f"Validation Box Detections: {test_tp + test_fp}\n"
+                f"True Annotations Mapped:   {test_tp + test_fn}\n\n"
+                f"True Positives (TP):  {test_tp}\n"
+                f"False Positives (FP): {test_fp}\n"
+                f"False Negatives (FN): {test_fn}\n\n"
+                f"Precision: {precision:.4f}\n"
+                f"Recall:    {recall:.4f}\n"
+                f"F1-Score:  {f1:.4f}\n"
+                f"-------------------------------------------\n"
+                f"Total Objective Loss: {test_loss:.4f}\n")
     
     print(test_msg)
     with open(results_file, "a") as f:
