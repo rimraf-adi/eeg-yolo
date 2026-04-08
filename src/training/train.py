@@ -39,7 +39,7 @@ def yolo_loss(preds, targets, obj_pos_weight=1.0):
         
     return loss_obj, loss_box, loss_cls
 
-def extract_events_from_grid(tensor, conf_threshold=0.5, cell_duration=0.1, num_classes=3):
+def extract_events_from_grid(tensor, conf_threshold=0.5, cell_duration=0.05, num_classes=3):
     """
     Dynamically reconstructs discrete temporal occurrences from a dense 1D structural grid.
     Returns: List of events per batch sample -> [[{'time': t, 'class': c, 'conf': p_c}, ...], ...]
@@ -202,6 +202,7 @@ def train(
         stride_sec=stride_sec,
         fs=fs,
         S=S,
+        num_classes=num_classes,
         allowed_pids=train_pids,
     )
     print("Loading VAL dataset...")
@@ -212,6 +213,7 @@ def train(
         stride_sec=stride_sec,
         fs=fs,
         S=S,
+        num_classes=num_classes,
         allowed_pids=val_pids,
     )
     print("Loading TEST dataset...")
@@ -222,6 +224,7 @@ def train(
         stride_sec=stride_sec,
         fs=fs,
         S=S,
+        num_classes=num_classes,
         allowed_pids=test_pids,
     )
     

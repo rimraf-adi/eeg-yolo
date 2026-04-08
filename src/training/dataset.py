@@ -9,6 +9,9 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 
+from src.training.annotation_parser import parse_annotations
+from src.training.target_builder import build_target
+
 logger = logging.getLogger(__name__)
 
 class EEGRegressionDataset(Dataset):
@@ -17,7 +20,7 @@ class EEGRegressionDataset(Dataset):
     Transforms raw 29-channel EEG signals into an 18-channel Bipolar Subtracted Tensor.
     Converts timestamp annotations into strict S-segment Grid bounding box targets.
     """
-    def __init__(self, data_dir, anno_dir, window_size_sec=10.0, stride_sec=10.0, fs=500, S=100, allowed_pids=None):
+    def __init__(self, data_dir, anno_dir, window_size_sec=10.0, stride_sec=10.0, fs=500, S=100, num_classes=3, allowed_pids=None):
         self.data_dir = Path(data_dir)
         self.anno_dir = Path(anno_dir)
         self.window_size_sec = float(window_size_sec)
@@ -34,9 +37,9 @@ class EEGRegressionDataset(Dataset):
         self.window_samples = int(math.ceil(raw_samples / 32) * 32)
         self.stride_samples = int(self.stride_sec * self.fs)
         
-        # 1. Global Setup
-        self.class_map = {'!': 0, '!start': 1, '!end': 2}
-        self.num_classes = len(self.class_map)
+        # 1. Global Setup — class mapping handled by annotation_parser:
+        #    Sleeping=0, !=1, !start/!end segments=2
+        self.num_classes = int(num_classes)
         
         # Explicit Bipolar Pair Matrix mapping directly from the 29-channel layout
         self.bipolar_indices = [
@@ -62,7 +65,7 @@ class EEGRegressionDataset(Dataset):
         self.num_channels = len(self.bipolar_indices)
         
         self.eeg_cache = {}    # pid -> memmapped fast numpy array [18, time]
-        self.events_cache = {} # pid -> pandas dataframe holding times & classes
+        self.events_cache = {} # pid -> parsed annotations DataFrame [t_center_abs, rel_width_abs, class_id, is_segment]
         self.samples = []
         
         self._load_and_build(allowed_pids)
@@ -103,8 +106,9 @@ class EEGRegressionDataset(Dataset):
                     
                 self.eeg_cache[pid] = bipolar_data
                 
-                # Load explicitly the surviving validated events
-                events_df = pd.read_csv(events_csv)
+                # Parse annotations using dedicated parser (handles segment pairing,
+                # correct class mapping: Sleeping=0, !=1, !start/!end segments=2)
+                events_df = parse_annotations(str(events_csv))
                 self.events_cache[pid] = events_df
                 
                 max_duration = raw_data.shape[1] / self.fs
@@ -165,40 +169,17 @@ class EEGRegressionDataset(Dataset):
         X_tensor = torch.tensor(norm_x, dtype=torch.float32)
         
         # ---------------------------------------------------------
-        # Target Tensor Construction (Y) YOLO [S, 1, 2 + num_classes]
+        # Target Tensor Construction (Y) via build_target
+        # Uses parsed annotations with correct class mapping:
+        #   Sleeping=0, !=1, !start/!end segments=2
+        # All timestamps are relativized to the window start.
         # ---------------------------------------------------------
-        # Shape: [100, 1, 5] since we have 3 classes mapped dynamically.
-        Y_tensor = torch.zeros((self.S, 1, 2 + self.num_classes), dtype=torch.float32)
+        config = {
+            'S': self.S,
+            'window_size_sec': self.window_size_sec,
+            'num_classes': self.num_classes,
+        }
+        annotations_df = self.events_cache[pid]
+        Y_tensor = build_target(annotations_df, start_time, end_time, config)
         
-        events_df = self.events_cache[pid]
-        # Strict window constraint bounding
-        window_events = events_df[(events_df['timestamp_sec'] >= start_time) & (events_df['timestamp_sec'] < end_time)]
-        
-        for _, row in window_events.iterrows():
-            label = str(row['label']).strip()
-            if label not in self.class_map:
-                continue
-                
-            relative_time = row['timestamp_sec'] - start_time
-            i = int(math.floor(relative_time / self.cell_duration))
-            
-            # Grid bounds limiting
-            if i >= self.S: i = self.S - 1
-            if i < 0: i = 0
-            
-            t_x = (relative_time % self.cell_duration) / self.cell_duration
-            class_idx = self.class_map[label]
-            
-            # Warn structural collisions safely
-            if Y_tensor[i, 0, 0] == 1.0:
-                logger.warning(f"Grid collision detected at index {i} in Patient {pid}. Consider increasing S hyperparameter!")
-                # Keep the original offset and add class presence to avoid destructive overwrite.
-                Y_tensor[i, 0, 2 + class_idx] = 1.0
-                continue
-
-            # Populate Vector
-            Y_tensor[i, 0, 0] = 1.0                   # Objectness
-            Y_tensor[i, 0, 1] = float(t_x)            # Scaled Offset
-            Y_tensor[i, 0, 2 + class_idx] = 1.0       # Class bit
-            
         return X_tensor, Y_tensor
