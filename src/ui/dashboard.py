@@ -3,14 +3,17 @@ import os
 import glob
 import scipy.io as sio
 import pandas as pd
+import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+from src.config import PATHS
+
+# ---- Configuration ----
+MAT_DIR = PATHS["mat_dir"]
+EVENTS_DIR = PATHS["processed_events_dir"]
+SAMPLE_RATE = 500  # Native sampling frequency for this dataset
 
 st.set_page_config(page_title="EEG MAT Explorer", layout="wide")
-
-MAT_DIR = "/Volumes/WORKSPACE/opensource-dataset/MAT_Files"
-EVENTS_DIR = "/Volumes/WORKSPACE/opensource-dataset/processed/extracted_events"
-SAMPLE_RATE = 500  # Native sampling frequency for this dataset
 
 st.title("🧠 EEG Interactive Dataset Dashboard")
 st.markdown("Explore identical `.mat` structures, visualize 29-channel contiguous EEG segments instantly, and cross-reference annotated clinical events (`'`, `!start`, `Waking`).")

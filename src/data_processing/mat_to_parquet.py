@@ -3,9 +3,10 @@ import glob
 import scipy.io as sio
 import pandas as pd
 from tqdm import tqdm
+from src.config import PATHS
 
-mat_dir = "/Volumes/WORKSPACE/opensource-dataset/MAT_Files"
-out_dir = "/Volumes/WORKSPACE/opensource-dataset/parquet_data"
+mat_dir = PATHS["mat_dir"]
+out_dir = PATHS["parquet_data_dir"]
 
 os.makedirs(out_dir, exist_ok=True)
 

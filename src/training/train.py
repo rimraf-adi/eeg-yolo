@@ -327,10 +327,12 @@ def train(data_dir, anno_dir, epochs=50, batch_size=16, lr=1e-3, patience=5, res
     print(f"Results stored in {results_file} in current directory.")
 
 if __name__ == '__main__':
+    from src.config import PATHS, TRAINING
+    
     train(
-        data_dir='/Volumes/WORKSPACE/opensource-dataset/processed/parquet_data',
-        anno_dir='/Volumes/WORKSPACE/opensource-dataset/processed/extracted_events',
-        epochs=50,
-        batch_size=128,
-        results_file='results.txt'
+        data_dir=PATHS["processed_parquet_dir"],
+        anno_dir=PATHS["processed_events_dir"],
+        epochs=TRAINING["epochs"],
+        batch_size=TRAINING["batch_size"],
+        results_file=TRAINING["results_file"]
     )

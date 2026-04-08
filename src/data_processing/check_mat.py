@@ -1,7 +1,11 @@
 import scipy.io as sio
-import numpy as np
+import scipy.io
 
-mat_path = "/Volumes/WORKSPACE/opensource-dataset/MAT_Files/DA00100S.mat"
+# Only targets P001 by default, but keeping absolute limit dynamically updated
+from src.config import PATHS
+import os
+
+mat_path = os.path.join(PATHS["mat_dir"], "P001.mat")
 mat = sio.loadmat(mat_path)
 
 events = mat['events']

@@ -1,8 +1,10 @@
 import os
 import glob
 import pandas as pd
+import re
+from src.config import PATHS
 
-BASE_DIR = "/Volumes/WORKSPACE/opensource-dataset"
+BASE_DIR = PATHS["base_dir"]
 PROCESSED_DIR = os.path.join(BASE_DIR, "processed")
 MAT_DIR = os.path.join(BASE_DIR, "MAT_Files")
 EVENTS_DIR = os.path.join(PROCESSED_DIR, "extracted_events")

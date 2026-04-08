@@ -1,9 +1,10 @@
 import os
 import glob
 import pandas as pd
-import shutil
+import csv
+from src.config import PATHS
 
-BASE_DIR = "/Volumes/WORKSPACE/opensource-dataset"
+BASE_DIR = PATHS["base_dir"]
 MAT_DIR = os.path.join(BASE_DIR, "MAT_Files")
 EVENTS_DIR = os.path.join(BASE_DIR, "extracted_events")
 PARQUET_DIR = os.path.join(BASE_DIR, "parquet_data")

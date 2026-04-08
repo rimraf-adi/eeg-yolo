@@ -2,8 +2,9 @@ import os
 import glob
 import pandas as pd
 from tqdm import tqdm
+from src.config import PATHS
 
-EVENTS_DIR = "/Volumes/WORKSPACE/opensource-dataset/processed/extracted_events"
+EVENTS_DIR = PATHS["processed_events_dir"]
 csv_files = glob.glob(os.path.join(EVENTS_DIR, "*_events.csv"))
 
 print(f"Filtering {len(csv_files)} event files to discard 'Waking' and 'Sleeping' markers...")

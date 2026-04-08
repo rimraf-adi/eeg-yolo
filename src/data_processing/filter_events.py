@@ -2,10 +2,11 @@ import os
 import glob
 import pandas as pd
 import shutil
+from src.config import PATHS
 
-EVENTS_DIR = "/Volumes/WORKSPACE/opensource-dataset/extracted_events"
-PARQUET_DIR = "/Volumes/WORKSPACE/opensource-dataset/parquet_data"
-DISCARD_DIR = "/Volumes/WORKSPACE/opensource-dataset/discarded"
+EVENTS_DIR = PATHS["events_dir"]
+PARQUET_DIR = PATHS["parquet_data_dir"]
+DISCARD_DIR = PATHS["discard_dir"]
 
 os.makedirs(DISCARD_DIR, exist_ok=True)
 os.makedirs(os.path.join(DISCARD_DIR, "events"), exist_ok=True)

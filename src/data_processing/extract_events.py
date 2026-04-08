@@ -3,9 +3,10 @@ import glob
 import scipy.io as sio
 import csv
 from tqdm import tqdm
+from src.config import PATHS
 
-mat_dir = "/Volumes/WORKSPACE/opensource-dataset/MAT_Files"
-out_dir = "/Volumes/WORKSPACE/opensource-dataset/extracted_events"
+mat_dir = PATHS["mat_dir"]
+out_dir = PATHS["events_dir"]
 
 os.makedirs(out_dir, exist_ok=True)
 

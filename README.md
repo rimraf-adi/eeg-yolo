@@ -41,9 +41,15 @@ uv run python -m src.data_processing.mat_to_parquet
 ```
 _Function:_ Extracts raw dense numerical matrices recursively dynamically loading internal arrays tracking strictly saving them tightly mapped locally inside PyArrow `.parquet` arrays. Substantially boosts streaming batch sequences bypassing native disk IO bottlenecks.
 
+**6. Filter Discarded Parquet Bounds**
+```bash
+uv run python -m src.data_processing.filter_events
+```
+_Function:_ Verifies exact matching Start/Stop cardinalities inside the `_events.csv` files natively comparing boundaries. Discards unaligned Parquet data securely preventing training crashes dynamically routing broken sequence arrays into `/discarded`.
+
 ### Phase 3: Train Evaluation Network
 
-**6. Model Generation Evaluation**
+**7. Model Generation Evaluation**
 ```bash
 uv run python -m src.training.train
 ```
