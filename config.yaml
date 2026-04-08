@@ -4,19 +4,19 @@
 
 paths:
   # Base dataset root directory mapping
-  base_dir: "/Volumes/WORKSPACE/opensource-dataset"
-  
+  base_dir: "../opensource-dataset"
+
   # Raw input directories
-  mat_dir: "/Volumes/WORKSPACE/opensource-dataset/MAT_Files"
-  
+  mat_dir: "../opensource-dataset/MAT_Files"
+
   # Extracted and compiled intermediate processing states
-  events_dir: "/Volumes/WORKSPACE/opensource-dataset/extracted_events"
-  parquet_data_dir: "/Volumes/WORKSPACE/opensource-dataset/parquet_data"
-  discard_dir: "/Volumes/WORKSPACE/opensource-dataset/discarded"
-  
+  events_dir: "../opensource-dataset/extracted_events"
+  parquet_data_dir: "../opensource-dataset/parquet_data"
+  discard_dir: "../opensource-dataset/discarded"
+
   # Final cleanly processed execution states targeting Training pipelines
-  processed_events_dir: "/Volumes/WORKSPACE/opensource-dataset/processed/extracted_events"
-  processed_parquet_dir: "/Volumes/WORKSPACE/opensource-dataset/processed/parquet_data"
+  processed_events_dir: "../opensource-dataset/processed/extracted_events"
+  processed_parquet_dir: "../opensource-dataset/processed/parquet_data"
 
 training:
   epochs: 50
@@ -24,6 +24,9 @@ training:
   learning_rate: 0.001
   patience: 5
   results_file: "results.txt"
+  conf_threshold: 0.35
+  obj_pos_weight: 12.0
+  threshold_sweep: [0.20, 0.25, 0.30, 0.35, 0.40, 0.50, 0.60,0.65,0.7,0.75,0.80,0.85,0.90,0.95  ]
 
 model:
   in_channels: 18
@@ -31,7 +34,7 @@ model:
 
 dataset:
   window_size_sec: 10.0
-  stride_sec: 10.0
+  stride_sec: 2.0
   fs: 500
-  S: 100
+  S: 200
   tau: 0.25

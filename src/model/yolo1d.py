@@ -219,11 +219,11 @@ class SequentialYoloHead(torch.nn.Module):
         return torch.sigmoid(out)
 
 class YOLO(torch.nn.Module):
-    def __init__(self, width, depth, csp):
+    def __init__(self, width, depth, csp, S=100, num_classes=3):
         super().__init__()
         self.net = DarkNet(width, depth, csp)
         self.fpn = DarkFPN(width, depth, csp)
-        self.head = SequentialYoloHead((width[3], width[4], width[5]))
+        self.head = SequentialYoloHead((width[3], width[4], width[5]), S=S, num_classes=num_classes)
 
     def forward(self, x):
         x = self.net(x)
@@ -238,26 +238,26 @@ class YOLO(torch.nn.Module):
                 delattr(m, 'norm')
         return self
 
-def yolo_1d_v11_n(in_channels: int = 18):
+def yolo_1d_v11_n(in_channels: int = 18, S: int = 100, num_classes: int = 3):
     csp = [False, True]
     depth = [1, 1, 1, 1, 1, 1]
     width = [in_channels, 16, 32, 64, 128, 256]
-    return YOLO(width, depth, csp)
+    return YOLO(width, depth, csp, S=S, num_classes=num_classes)
 
-def yolo_1d_v11_t(in_channels: int = 18):
+def yolo_1d_v11_t(in_channels: int = 18, S: int = 100, num_classes: int = 3):
     csp = [False, True]
     depth = [1, 1, 1, 1, 1, 1]
     width = [in_channels, 24, 48, 96, 192, 384]
-    return YOLO(width, depth, csp)
+    return YOLO(width, depth, csp, S=S, num_classes=num_classes)
 
-def yolo_1d_v11_s(in_channels: int = 18):
+def yolo_1d_v11_s(in_channels: int = 18, S: int = 100, num_classes: int = 3):
     csp = [False, True]
     depth = [1, 1, 1, 1, 1, 1]
     width = [in_channels, 32, 64, 128, 256, 512]
-    return YOLO(width, depth, csp)
+    return YOLO(width, depth, csp, S=S, num_classes=num_classes)
 
-def yolo_1d_v11_m(in_channels: int = 18):
+def yolo_1d_v11_m(in_channels: int = 18, S: int = 100, num_classes: int = 3):
     csp = [True, True]
     depth = [1, 1, 1, 1, 1, 1]
     width = [in_channels, 64, 128, 256, 512, 512]
-    return YOLO(width, depth, csp)
+    return YOLO(width, depth, csp, S=S, num_classes=num_classes)

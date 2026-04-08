@@ -187,17 +187,18 @@ class EEGRegressionDataset(Dataset):
             if i < 0: i = 0
             
             t_x = (relative_time % self.cell_duration) / self.cell_duration
+            class_idx = self.class_map[label]
             
             # Warn structural collisions safely
             if Y_tensor[i, 0, 0] == 1.0:
                 logger.warning(f"Grid collision detected at index {i} in Patient {pid}. Consider increasing S hyperparameter!")
-                
+                # Keep the original offset and add class presence to avoid destructive overwrite.
+                Y_tensor[i, 0, 2 + class_idx] = 1.0
+                continue
+
             # Populate Vector
             Y_tensor[i, 0, 0] = 1.0                   # Objectness
             Y_tensor[i, 0, 1] = float(t_x)            # Scaled Offset
-            
-            # Assign One-Hot Class dynamically mapping classes uniformly
-            class_idx = self.class_map[label]
-            Y_tensor[i, 0, 2 + class_idx] = 1.0
+            Y_tensor[i, 0, 2 + class_idx] = 1.0       # Class bit
             
         return X_tensor, Y_tensor
