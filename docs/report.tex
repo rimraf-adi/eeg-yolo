@@ -1,0 +1,66 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{hyperref}
+
+\begin{document}
+
+\title{Neonatal EEG Seizure Detection Pipeline\\
+{\footnotesize \textsuperscript{*}A Transition Architecture: Legacy `.mat` Consolidation to optimized 1D Point-YOLO Tracking}}
+
+\author{\IEEEauthorblockN{Aditya Kinjawadekar}
+\IEEEauthorblockA{\textit{100xCode Research Framework}}}
+
+\maketitle
+
+\begin{abstract}
+This report outlines the structural compilation and optimization of a high-performance Neonatal EEG Seizure Detection pipeline. Driven by the necessity to overhaul inefficient legacy `.mat`-based routines, the data integration mechanism was entirely transformed into optimized columnar Apache Parquet vectors. To implement point-only precise tracking, standard global generic loss pooling was removed. Instead, the computational framework was fundamentally re-architectured into a localized 1D YOLO evaluation network tracking discrete boundaries dynamically implementing bespoke point-based metrics.
+\end{abstract}
+
+\section{Introduction}
+Clinical Electroencephalography (EEG) produces voluminous streams of contiguous numerical frequencies tracking localized cerebral pathways. Real-world continuous monitoring necessitates sophisticated data unification natively optimizing localized detection logic spanning immense bounds. Our objective focused intensively on standardizing anomalous datasets tracking specific spatial outputs continuously mapped to optimized YOLO bounding architectures. Standard classification parameters failed systematically due to spatial bounding structures strictly requiring continuous evaluation algorithms.
+
+\section{Dataset Consolidation}
+Originally isolated across disorganized arrays matching unstructured sequence tags, the primary framework was rigorously unified:
+\begin{itemize}
+    \item \textbf{ID Standardization:} We successfully sequenced all patients iteratively producing sequential contiguous keys spanning exactly $P001 - P082$. A centralized master-mapping ledger (\texttt{id\_mapping.csv}) validates the sequence natively.
+    \item \textbf{Columnar Storage Transition:} Raw matrices bound inside deprecated `.mat` formats dynamically failed local scale evaluations. We strictly converted these inputs iteratively writing columnar \texttt{Parquet} configurations, drastically eliminating disk parsing latency bounds.
+    \item \textbf{Annotation Trimming:} Orphaned structures outputting unaligned continuous states were isolated and mathematically unlinked. Furthermore, routine background conditions such as `Waking` or `Sleeping` were safely stripped, ensuring pure seizure logic evaluation sequences efficiently map detection models.
+\end{itemize}
+
+\section{Multi-Channel Double Banana Splicing}
+The core evaluation structures historically forced manual 29-dimensional inputs continuously passing independent tracks natively. We logically programmed \texttt{EEGRegressionDataset} implementing discrete mappings natively unifying tracks into the standardized \textbf{18-Channel Double Banana Montage}.
+
+\begin{equation}
+    M_{i,j}(t) = Ch_i(t) - Ch_j(t)
+\end{equation}
+
+By precisely extracting spatial bounds recursively dynamically inside PyTorch \texttt{\_\_getitem\_\_}, we avoided cumbersome offline generation. 
+
+\subsection{Architectural FPN Scale Padding}
+A pivotal architectural discovery highlighted systematic UNet and Feature Pyramid Network (FPN) scaling crashes native to PyTorch limits natively processing integer pooling grids. Passing precisely 10 seconds of raw tracking sequences running exactly at $f_s = 500$ Hz systematically yielded lengths of $L=5000$. 
+
+The 1D YOLO network bounds spatial sizes repeatedly cutting grid spaces dynamically (e.g., $5000/2=2500$ iteratively across a hierarchy of $2^5 = 32$). The dimension dynamically forced partial integers (e.g. $156.25$) systematically crashing upsampling sequence logic limits inherently out of parity. 
+
+To overcome this fundamentally, the structural boundaries natively track and calculate exact multiples mapping mathematically seamlessly bypassing FPN errors globally dynamically appending 24 zeroes expanding dynamically safely tracking matrices identically mapping $[Batch, 18, 5024]$.
+
+\section{Point-Detection YOLO Evaluator}
+To construct discrete mappings continuously bounding specific chronological fractions $t_x$, the internal `SequentialYoloHead` completely overwrites general `AdaptiveAvgPool1d(1)` pooling structures tracking scalar matrices natively into explicit continuous boundaries natively bounded locally tracking predictions tracking matrices perfectly matching $S=100$.
+
+\begin{equation}
+    Loss = 5 \cdot BCE_{{Objectness}} + MSE_{{t_x}} + BCE_{{Class}}
+\end{equation}
+
+By tracking fractional outputs bounding directly across $0.0 - 1.0$ internally squashed sequentially mapped parameters dynamically parsing limits locally, the bounding models systematically target optimal object detections linearly natively mapping outputs dynamically directly bounding temporal fractions!
+
+\section{Non-IoU Temporal Metrics}
+Finally, evaluating 1D objects effectively invalidates standard $2D$ Intersection-over-Union configurations exactly evaluating discrete singular occurrences natively lacking size dimensions. We strictly introduced generic temporal $F_1$ limits effectively bounding precision natively directly mapping continuous tracking matrices safely comparing objects cleanly strictly matching boundaries securely across a logical temporal limit natively bounded accurately exactly $\tau = 0.25$ seconds. Every evaluation dynamically spans matrices outputting exactly cleanly natively Precision, Recall, and comprehensive validation parameters natively outputting outputs functionally smoothly dynamically.
+
+\end{document}
