@@ -70,16 +70,49 @@ uv run python -m src.training.train
 
 _Function:_ Instantiates PyTorch sequence operations dynamically natively extracting Double Banana sequences on-the-fly (`18 channels, 5024 samples`), processing spatial limits structurally via `yolo1d.py`, securely tracking limits generating exactly continuous F1-scores mapping localized Object configurations sequentially over 50 epochs natively cleanly evaluated dynamically against Test sets logically.
 
+## Implemented Methodology
+
+The current pipeline is built around a sliding-window 1D detection problem rather than a standard image detector. The implemented methodology is:
+
+### 1. Annotation Cleanup and Dataset Compaction
+
+- Empty annotation CSV files are detected recursively under the active events directory and removed.
+- Paired raw files are removed alongside empty annotations so the dataset stays aligned.
+- `Sleeping` and `Waking` rows are removed from the event stream completely.
+- After cleanup, patient IDs are compacted so the remaining files stay contiguous from `P001` upward.
+
+### 2. Annotation Reconstruction
+
+- The active labels are kept as three point classes: `!`, `!start`, and `!end`.
+- `Sleeping` and `Waking` rows are removed before training.
+- The annotation parser converts each valid timestamp into a point event with a class id.
+
+### 3. Sliding-Window Target Construction
+
+- EEG recordings are loaded into fixed windows of `window_size_sec` seconds.
+- Each window is divided into `S` temporal grid cells.
+- Events are mapped to the current window using window-relative coordinates instead of global timestamps.
+- For each valid point event, the target builder computes the cell index and the normalized offset inside that cell.
+- If two events fall into the same cell, the newer one overwrites the older one and a warning is emitted.
+
+### 4. Model and Training Flow
+
+- The model consumes 18 bipolar EEG channels and predicts 1D temporal detections across the `S` grid.
+- The training loop uses objectness, offset, and class losses.
+- Validation and test evaluation are driven by temporal tolerance `tau`, not IoU.
+- The evaluation loop reports precision, recall, and F1, and it can sweep confidence thresholds to find the best operating point.
+
+### 5. Current Label Set
+
+- After cleanup, the active training annotations are the three EEG point labels: `!`, `!start`, and `!end`.
+- `Sleeping` and `Waking` are treated as preprocessing noise and are excluded from training.
+
 ## Hyperparameter Note: `S` (Temporal Grid Size)
 
 `S` is the number of temporal grid cells used by YOLO inside each input window.
 
 - Window duration is `window_size_sec` seconds.
-- Each grid cell covers:
-
-$$
-	ext{cell\_duration} = \frac{\text{window\_size\_sec}}{S}
-$$
+- Each grid cell covers `window_size_sec / S` seconds.
 
 - Example with `window_size_sec = 10`:
   - `S = 100` -> each cell is `0.10s`
@@ -100,3 +133,47 @@ Practical starting range:
 
 - Try `S` in `[150, 300]` for dense event timelines.
 - Keep `window_size_sec` fixed first, tune `S`, then tune `conf_threshold` and `obj_pos_weight`.
+
+## Relative Annotation Mapping (How It Works)
+
+The training pipeline stores annotation timestamps as absolute seconds, then converts them to window-relative positions at target build time.
+
+1. Parsing step (`parse_annotations`):
+- Keeps only `!`, `!start`, `!end`.
+- Stores absolute time in `t_center_abs`.
+
+2. Window filtering step (`build_target`):
+- For a window `[t_win_start, t_win_end)`, an event is used only if:
+  - `t_win_start <= t_center_abs < t_win_end`
+
+3. Relative conversion:
+- `rel_center = (t_center_abs - t_win_start) / window_size_sec`
+- This gives a normalized position in `[0, 1)` inside the current window.
+
+4. Grid assignment:
+- `cell_idx = floor(rel_center * S)`
+- `cell_offset = (rel_center * S) - cell_idx`
+- Target values set at `target[cell_idx]`:
+  - `target[cell_idx, 0] = 1.0` (objectness)
+  - `target[cell_idx, 1] = cell_offset`
+  - one-hot class in `target[cell_idx, 2:]`
+
+### Worked Example
+
+Given:
+- `window_size_sec = 10.0`
+- `S = 200` cells (`0.05s` per cell)
+- Event timestamp: `t_center_abs = 11.842s`
+- Window: `[10.0, 20.0)`
+
+Compute:
+- `rel_center = (11.842 - 10.0) / 10.0 = 0.1842`
+- `cell_idx = floor(0.1842 * 200) = floor(36.84) = 36`
+- `cell_offset = 36.84 - 36 = 0.84`
+
+So the target row for this event is written to cell `36` with:
+- objectness `1.0`
+- offset `0.84`
+- class one-hot for label `!` (class id `0`)
+
+Because windows overlap (for example stride < window size), the same absolute event can appear in multiple windows, but at different relative cell locations in each window. This behavior is expected and is covered by tests.
