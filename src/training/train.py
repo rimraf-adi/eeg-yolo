@@ -39,9 +39,8 @@ def calc_metrics(y_true, y_pred, p=18):
     return r2, adj_r2, mae, rmse
 
 def train(data_dir, anno_dir, epochs=50, batch_size=16, lr=1e-3, patience=5, results_file="results.txt"):
-    EEG_IDX = [1, 4, 5, 7, 9, 11, 13, 14, 15, 16, 17, 19, 20, 21, 22, 25, 31, 34,
-               36, 38, 39, 40, 41, 44, 47, 50, 51, 52, 62, 63, 66, 67, 69, 73, 75,
-               76, 77, 78, 79]
+    # We natively isolated the dataset strictly from P001 to P082!
+    EEG_IDX = list(range(1, 83))
 
     # Split patients into Train / Val / Test (~70-15-15 split)
     random.seed(42) # fixed seed for reproducibility
@@ -57,15 +56,15 @@ def train(data_dir, anno_dir, epochs=50, batch_size=16, lr=1e-3, patience=5, res
     test_pids = shuffled_idx[val_split:]
 
     with open(results_file, "w") as f:
-        f.write(f"EEG Seizure 1D Regression Training\n")
-        f.write(f"Total Patients (from EEG_IDX): {n_pids}\n")
+        f.write(f"EEG Seizure 1D Multi-Channel YOLO Regression Training\n")
+        f.write(f"Total Patients Analyzed: {n_pids}\n")
         f.write(f"Train PIDs: {train_pids}\n")
         f.write(f"Val PIDs: {val_pids}\n")
         f.write(f"Test PIDs: {test_pids}\n")
         f.write("-" * 50 + "\n\n")
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
-    print(f"Using device: {device}")
+    print(f"Assigning GPU Engine backend mapping natively: {device}")
     
     print("Loading TRAIN dataset...")
     train_ds = EEGRegressionDataset(data_dir, anno_dir, allowed_pids=train_pids) 
@@ -228,9 +227,9 @@ def train(data_dir, anno_dir, epochs=50, batch_size=16, lr=1e-3, patience=5, res
 
 if __name__ == '__main__':
     train(
-        data_dir='/Volumes/WORKSPACE/neonatal',
-        anno_dir='/Volumes/WORKSPACE/dense_annotations_neonatal',
+        data_dir='/Volumes/WORKSPACE/opensource-dataset/processed/parquet_data',
+        anno_dir='/Volumes/WORKSPACE/opensource-dataset/processed/extracted_events',
         epochs=50,
-        batch_size=8,
+        batch_size=128,
         results_file='results.txt'
     )

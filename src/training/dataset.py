@@ -1,166 +1,131 @@
 import os
 import glob
+import math
+import logging
 from pathlib import Path
-import gc
 
 import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
-import mne
 
-mne.set_log_level('WARNING')
+logger = logging.getLogger(__name__)
 
 class EEGRegressionDataset(Dataset):
     """
-    Dataset to yield 10-second sliding windows of 18-channel EEG data.
-    Uses specific bipolar references and preloads everything into RAM.
-    Targets are [start_time, end_time, label_fraction] for the window.
+    1D Multi-Channel YOLO DataLoader mapping Continuous Parquets to YOLO format.
+    Transforms raw 29-channel EEG signals into an 18-channel Bipolar Subtracted Tensor.
+    Converts timestamp annotations into strict S-segment Grid bounding box targets.
     """
-    def __init__(self, data_dir, anno_dir, window_sec=10, stride_sec=1, fs=256, allowed_pids=None):
+    def __init__(self, data_dir, anno_dir, window_size_sec=10.0, stride_sec=10.0, fs=500, S=100, allowed_pids=None):
         self.data_dir = Path(data_dir)
         self.anno_dir = Path(anno_dir)
-        self.window_sec = window_sec
-        self.stride_sec = stride_sec
-        self.fs = fs
-        self.window_samples = int(window_sec * fs)
-        self.stride_samples = int(stride_sec * fs)
+        self.window_size_sec = float(window_size_sec)
+        self.stride_sec = float(stride_sec)
+        self.fs = int(fs)
+        self.S = int(S)
+        self.cell_duration = self.window_size_sec / self.S
         
-        self.bipolar_pairs = [
-            ('EEG Fp1-REF', 'EEG F7-REF'), ('EEG F7-REF',  'EEG T3-REF'),
-            ('EEG T3-REF',  'EEG T5-REF'), ('EEG T5-REF',  'EEG O1-REF'),
-            ('EEG Fp1-REF', 'EEG F3-REF'), ('EEG F3-REF',  'EEG C3-REF'),
-            ('EEG C3-REF',  'EEG P3-REF'), ('EEG P3-REF',  'EEG O1-REF'),
-            ('EEG Fz-REF',  'EEG Cz-REF'), ('EEG Cz-REF',  'EEG Pz-REF'),
-            ('EEG Fp2-REF', 'EEG F4-REF'), ('EEG F4-REF',  'EEG C4-REF'),
-            ('EEG C4-REF',  'EEG P4-REF'), ('EEG P4-REF',  'EEG O2-REF'),
-            ('EEG Fp2-REF', 'EEG F8-REF'), ('EEG F8-REF',  'EEG T4-REF'),
-            ('EEG T4-REF',  'EEG T6-REF'), ('EEG T6-REF',  'EEG O2-REF'),
+        self.window_samples = int(self.window_size_sec * self.fs)
+        self.stride_samples = int(self.stride_sec * self.fs)
+        
+        # 1. Global Setup
+        self.class_map = {'!': 0, '!start': 1, '!end': 2}
+        self.num_classes = len(self.class_map)
+        
+        # Explicit Bipolar Pair Matrix mapping directly from the 29-channel layout
+        self.bipolar_indices = [
+            (1, 3),   # Fp2-F4
+            (3, 5),   # F4-C4
+            (5, 7),   # C4-P4
+            (7, 9),   # P4-O2
+            (0, 2),   # Fp1-F3
+            (2, 4),   # F3-C3
+            (4, 6),   # C3-P3
+            (6, 8),   # P3-O1
+            (1, 11),  # Fp2-F8
+            (11, 13), # F8-T4
+            (13, 15), # T4-T6
+            (15, 9),  # T6-O2
+            (0, 10),  # Fp1-F7
+            (10, 12), # F7-T3
+            (12, 14), # T3-T5
+            (14, 8),  # T5-O1
+            (16, 17), # Fz-Cz
+            (17, 18), # Cz-Pz
         ]
+        self.num_channels = len(self.bipolar_indices)
         
-        self.desired_order = [
-            'Fp2-F4', 'F4-C4', 'C4-P4', 'P4-O2',
-            'Fp1-F3', 'F3-C3', 'C3-P3', 'P3-O1',
-            'Fp2-F8', 'F8-T4', 'T4-T6', 'T6-O2',
-            'Fp1-F7', 'F7-T3', 'T3-T5', 'T5-O1',
-            'Fz-Cz', 'Cz-Pz',
-        ]
-        
-        self._prepare_channel_mappings()
-        
-        self.eeg_data = {} # pid -> numpy array (18, n_samples)
+        self.eeg_cache = {}    # pid -> memmapped fast numpy array [18, time]
+        self.events_cache = {} # pid -> pandas dataframe holding times & classes
         self.samples = []
         
-        # Load indices and data
         self._load_and_build(allowed_pids)
 
-    def _prepare_channel_mappings(self):
-        def normalize(ch): return ch.strip().upper()
-        def pair_name(p): 
-            l = p[0].replace('EEG ', '').replace('-REF', '')
-            r = p[1].replace('EEG ', '').replace('-REF', '')
-            return f"{l}-{r}"
-
-        clean_pairs = [(normalize(a), normalize(b)) for a, b in self.bipolar_pairs]
-        name_map = {pair_name(p): cp for p, cp in zip(self.bipolar_pairs, clean_pairs)}
-        
-        self.reordered_pairs = [name_map[name] for name in self.desired_order if name in name_map]
-        self.anode = [a for a, _ in self.reordered_pairs]
-        self.cathode = [b for _, b in self.reordered_pairs]
-        
-        def pretty(ch): return ch.replace('EEG ', '').replace('-REF', '').capitalize()
-        self.ch_names = [f"{pretty(a)}-{pretty(b)}" for a, b in self.reordered_pairs]
-
-    def _get_array(self, filename: str):
-        try:
-            raw = mne.io.read_raw_edf(filename, preload=True, verbose=False)
-            raw.rename_channels(lambda ch: ch.upper())
-            
-            drop = ['ECG EKG', 'RESP EFFORT', 'ECG EKG-REF', 'RESP EFFORT-REF']
-            raw.drop_channels([c for c in drop if c in raw.ch_names])
-            
-            # Ensure required channels exist
-            missing_anodes = [a for a in self.anode if a not in raw.ch_names]
-            missing_cathodes = [c for c in self.cathode if c not in raw.ch_names]
-            
-            if missing_anodes or missing_cathodes:
-                print(f"File {filename} is missing some channels. Skipping referencing fallback.")
-                return None
-                
-            raw = mne.set_bipolar_reference(raw, anode=self.anode, cathode=self.cathode, ch_name=self.ch_names, copy=False, verbose=False)
-            
-            # Reorder to match desired exactly
-            raw.pick_channels(self.ch_names)
-            
-            data = raw.get_data().astype(np.float32)
-            return data
-        except Exception as e:
-            print(f"Error reading {filename}: {e}")
-            return None
-
     def _load_and_build(self, allowed_pids):
-        patient_folders = glob.glob(str(self.anno_dir / 'patient_*'))
-        patient_folders.sort()
-
-        print("🔵 Loading EEG data into RAM...")
-        for p_folder in patient_folders:
-            p_name = os.path.basename(p_folder)
-            pid = int(p_name.split('_')[1])
-            
-            if allowed_pids is not None and pid not in allowed_pids:
-                continue
-                
-            edf_path = self.data_dir / f'eeg{pid}.edf'
-            if not edf_path.exists():
-                print(f"Skipping {p_name}, no EDF found at {edf_path}")
-                continue
-                
-            csv_path = Path(p_folder) / 'annotations_w256_s256_strict.csv'
-            if not csv_path.exists():
-                continue
-                
-            # Preload the array fully 
-            data_arr = self._get_array(str(edf_path))
-            if data_arr is None:
-                continue
-                
-            self.eeg_data[pid] = data_arr
-            df = pd.read_csv(csv_path)
-            raw_labels = df['label'].values
-            
-            max_samples = data_arr.shape[1]
-            num_1s_blocks = len(raw_labels)
-            
-            # Generate overlapping windows
-            for start_idx in range(0, num_1s_blocks - self.window_sec + 1, self.stride_sec):
-                end_idx = start_idx + self.window_sec
-                
-                sample_start = start_idx * self.fs
-                sample_end = end_idx * self.fs
-                if sample_end > max_samples:
-                    break
-                    
-                window_labels = raw_labels[start_idx:end_idx]
-                
-                pos_indices = np.where(window_labels > 0)[0]
-                if len(pos_indices) > 0:
-                    start_time = float(pos_indices[0])
-                    end_time = float(pos_indices[-1] + 1)
-                    label_frac = float(len(pos_indices)) / self.window_sec
-                else:
-                    start_time = 0.0
-                    end_time = 0.0
-                    label_frac = 0.0
-                    
-                self.samples.append({
-                    'pid': pid,
-                    'sample_start': sample_start,
-                    'sample_end': sample_end,
-                    'target': [start_time, end_time, label_frac]
-                })
+        parquet_files = sorted(glob.glob(str(self.data_dir / "*.parquet")))
         
-        # Cleanup any memory leftover
-        gc.collect()
+        print(f"🔵 Scanning Dataset... Analyzing extracted events natively.")
+        for pq_path in parquet_files:
+            pid = os.path.basename(pq_path).replace('.parquet', '')
+            
+            # Prune generic ID prefix 'P', allowing integer subset targeting if specified
+            try:
+                pid_int = int(pid.replace('P', ''))
+            except:
+                continue
+                
+            if allowed_pids is not None and pid_int not in allowed_pids:
+                continue
+                
+            events_csv = self.anno_dir / f"{pid}_events.csv"
+            if not events_csv.exists():
+                continue
+                
+            """
+            Optimized loading:
+            1. Read PyArrow columnar formatting cleanly.
+            2. Compute standard double banana transform directly across columns in RAM avoiding memory spikes.
+            """
+            try:
+                # Transpose into shape (29, timestamps)
+                raw_data = pd.read_parquet(pq_path).values.T
+                
+                # Perform the mathematical channel subtraction bridging identically
+                bipolar_data = np.zeros((self.num_channels, raw_data.shape[1]), dtype=np.float32)
+                for c_idx, (anode, cathode) in enumerate(self.bipolar_indices):
+                    bipolar_data[c_idx, :] = raw_data[anode, :] - raw_data[cathode, :]
+                    
+                self.eeg_cache[pid] = bipolar_data
+                
+                # Load explicitly the surviving validated events
+                events_df = pd.read_csv(events_csv)
+                self.events_cache[pid] = events_df
+                
+                max_duration = raw_data.shape[1] / self.fs
+                
+                # Build Window Manifests
+                start_time = 0.0
+                while start_time + self.window_size_sec <= max_duration:
+                    end_time = start_time + self.window_size_sec
+                    
+                    self.samples.append({
+                        'pid': pid,
+                        'start_time': start_time,
+                        'end_time': end_time
+                    })
+                    start_time += self.stride_sec
+                    
+                # Handle trailing padding chunk
+                if max_duration - (start_time - self.stride_sec) > self.window_size_sec + 0.1:
+                    self.samples.append({
+                        'pid': pid, 
+                        'start_time': start_time, 
+                        'end_time': start_time + self.window_size_sec
+                    })
+                    
+            except Exception as e:
+                print(f"Error buffering {pid}: {e}")
 
     def __len__(self):
         return len(self.samples)
@@ -168,15 +133,66 @@ class EEGRegressionDataset(Dataset):
     def __getitem__(self, idx):
         s = self.samples[idx]
         pid = s['pid']
+        start_time = s['start_time']
+        end_time = s['end_time']
         
-        # Super fast array slicing from RAM
-        data = self.eeg_data[pid][:, s['sample_start']:s['sample_end']].copy()
+        # ---------------------------------------------------------
+        # Input Tensor Construction (X)
+        # ---------------------------------------------------------
+        start_idx = int(start_time * self.fs)
+        end_idx = int(end_time * self.fs)
         
-        # Standardization across time for each channel
-        mean = data.mean(axis=-1, keepdims=True)
-        std = data.std(axis=-1, keepdims=True) + 1e-6
-        data = (data - mean) / std
+        full_signal = self.eeg_cache[pid]
+        max_idx = full_signal.shape[1]
         
-        x = torch.from_numpy(data)
-        y = torch.tensor(s['target'], dtype=torch.float32)
-        return x, y
+        actual_end_idx = min(end_idx, max_idx)
+        raw_x = full_signal[:, start_idx:actual_end_idx].copy()
+        
+        # Edge sequence padding exactly maintaining [18, L] tensor
+        padded_x = np.zeros((self.num_channels, self.window_samples), dtype=np.float32)
+        padded_x[:, :raw_x.shape[1]] = raw_x
+        
+        # Z-score standardization locally
+        mean = padded_x.mean(axis=1, keepdims=True)
+        std = padded_x.std(axis=1, keepdims=True) + 1e-7
+        norm_x = (padded_x - mean) / std
+        
+        X_tensor = torch.tensor(norm_x, dtype=torch.float32)
+        
+        # ---------------------------------------------------------
+        # Target Tensor Construction (Y) YOLO [S, 1, 2 + num_classes]
+        # ---------------------------------------------------------
+        # Shape: [100, 1, 5] since we have 3 classes mapped dynamically.
+        Y_tensor = torch.zeros((self.S, 1, 2 + self.num_classes), dtype=torch.float32)
+        
+        events_df = self.events_cache[pid]
+        # Strict window constraint bounding
+        window_events = events_df[(events_df['timestamp_sec'] >= start_time) & (events_df['timestamp_sec'] < end_time)]
+        
+        for _, row in window_events.iterrows():
+            label = str(row['label']).strip()
+            if label not in self.class_map:
+                continue
+                
+            relative_time = row['timestamp_sec'] - start_time
+            i = int(math.floor(relative_time / self.cell_duration))
+            
+            # Grid bounds limiting
+            if i >= self.S: i = self.S - 1
+            if i < 0: i = 0
+            
+            t_x = (relative_time % self.cell_duration) / self.cell_duration
+            
+            # Warn structural collisions safely
+            if Y_tensor[i, 0, 0] == 1.0:
+                logger.warning(f"Grid collision detected at index {i} in Patient {pid}. Consider increasing S hyperparameter!")
+                
+            # Populate Vector
+            Y_tensor[i, 0, 0] = 1.0                   # Objectness
+            Y_tensor[i, 0, 1] = float(t_x)            # Scaled Offset
+            
+            # Assign One-Hot Class dynamically mapping classes uniformly
+            class_idx = self.class_map[label]
+            Y_tensor[i, 0, 2 + class_idx] = 1.0
+            
+        return X_tensor, Y_tensor
