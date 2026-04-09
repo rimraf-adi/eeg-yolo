@@ -32,12 +32,17 @@ for mat_file in tqdm(mat_files, desc="Extracting"):
             out_csv = os.path.join(out_dir, f"{pid}_events.csv")
             with open(out_csv, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
-                writer.writerow(['timestamp_sec', 'duration', 'label'])
+                writer.writerow(['timestamp_sec', 'label'])
                 
                 for row in events:
                     # Strip any padded spaces from MATLAB strings
                     cleaned_row = [str(item).strip() for item in row]
-                    writer.writerow(cleaned_row)
+                    if len(cleaned_row) >= 3:
+                        writer.writerow([cleaned_row[0], cleaned_row[2]])
+                    elif len(cleaned_row) == 2:
+                        writer.writerow(cleaned_row)
+                    else:
+                        print(f"Warning: Skipping malformed event row in {filename}: {cleaned_row}")
             extracted_count += 1
         else:
             print(f"Warning: No 'events' array found in {filename}")

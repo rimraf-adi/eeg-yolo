@@ -26,15 +26,39 @@ training:
   results_file: "results.txt"
   conf_threshold: 0.35
   obj_pos_weight: 12.0
-  threshold_sweep: [0.20, 0.25, 0.30, 0.35, 0.40, 0.50, 0.60,0.65,0.7,0.75,0.80,0.85,0.90,0.95  ]
+  val_metrics_every_n_epochs: 5
+  event_supervision: soft
+  gaussian_sigma_cells: 1.0
+  gaussian_radius_cells: 3.0
+  soft_offset_mask_threshold: 0.1
+  regression_metric_bins: 15
+  threshold_sweep:
+    [
+      0.20,
+      0.25,
+      0.30,
+      0.35,
+      0.40,
+      0.50,
+      0.60,
+      0.65,
+      0.7,
+      0.75,
+      0.80,
+      0.85,
+      0.90,
+      0.95,
+    ]
 
 model:
   in_channels: 18
+  image_channels: 1
+  mode: 2d
   num_classes: 3
 
 dataset:
   window_size_sec: 10.0
-  stride_sec: 2.0
+  stride_sec: 0.5
   fs: 500
   S: 200
-  tau: 0.25
+  tau: 1

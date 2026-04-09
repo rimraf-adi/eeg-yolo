@@ -1,6 +1,7 @@
 import math
 
 import torch
+import torch.nn.functional as F
 
 def fuse_conv_1d(conv, norm):
     fused_conv = torch.nn.Conv1d(conv.in_channels,
@@ -187,10 +188,23 @@ class DarkFPN(torch.nn.Module):
 
     def forward(self, x):
         p3, p4, p5 = x
-        p4 = self.h1(torch.cat(tensors=[self.up(p5), p4], dim=1))
-        p3 = self.h2(torch.cat(tensors=[self.up(p4), p3], dim=1))
-        p4 = self.h4(torch.cat(tensors=[self.h3(p3), p4], dim=1))
-        p5 = self.h6(torch.cat(tensors=[self.h5(p4), p5], dim=1))
+
+        def _resize_to(tensor, ref):
+            if tensor.shape[-1] == ref.shape[-1]:
+                return tensor
+            return F.interpolate(tensor, size=ref.shape[-1], mode="linear", align_corners=False)
+
+        p5_up = _resize_to(self.up(p5), p4)
+        p4 = self.h1(torch.cat(tensors=[p5_up, p4], dim=1))
+
+        p4_up = _resize_to(self.up(p4), p3)
+        p3 = self.h2(torch.cat(tensors=[p4_up, p3], dim=1))
+
+        p3_down = _resize_to(self.h3(p3), p4)
+        p4 = self.h4(torch.cat(tensors=[p3_down, p4], dim=1))
+
+        p4_down = _resize_to(self.h5(p4), p5)
+        p5 = self.h6(torch.cat(tensors=[p4_down, p5], dim=1))
         return p3, p4, p5
 
 class SequentialYoloHead(torch.nn.Module):
@@ -210,13 +224,10 @@ class SequentialYoloHead(torch.nn.Module):
         pooled = [self.pool(f) for f in x]
         features = torch.cat(pooled, dim=1) # [B, sum(filters), S=100]
         
-        out = self.conv(features)           # [B, 5, S=100]
+        out = self.conv(features)           # [B, 2 + num_classes, S]
         
-        # Permute dynamically to [Batch, 100, 1, 5] strictly matching dataset `Y` targets natively
-        out = out.transpose(1, 2).unsqueeze(2)
-        
-        # Sigmoidal squish universally applies spatial 0.0 - 1.0 constraints ensuring predictions never map boundaries out-of-scale
-        return torch.sigmoid(out)
+        # Return logits in [B, S, 2 + num_classes] for BCEWithLogits losses.
+        return out.transpose(1, 2)
 
 class YOLO(torch.nn.Module):
     def __init__(self, width, depth, csp, S=100, num_classes=3):

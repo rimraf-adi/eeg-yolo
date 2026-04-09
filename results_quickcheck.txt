@@ -5,29 +5,5 @@ Val PIDs: [81, 27, 35, 45, 42, 46, 26, 74, 65, 30, 28, 73]
 Test PIDs: [80, 5, 55, 12, 70, 14, 18, 29, 32, 36, 4, 15, 82]
 --------------------------------------------------
 
-Train Windows: 33537, Val Windows: 6747, Test Windows: 7830
+Train Windows: 79191, Val Windows: 19624, Test Windows: 21933
 
-Epoch 1/2:
-  [Train] Loss=0.8203 | Obj=0.1022
-  [Val]   Loss=0.6859 | F1=0.0376 | P=0.0202 | R=0.2732
-  -> BEST! Saved weights to best_model.pt
-Epoch 2/2:
-  [Train] Loss=0.5158 | Obj=0.0596
-  [Val]   Loss=0.5967 | F1=0.0591 | P=0.0328 | R=0.2961
-  -> BEST! Saved weights to best_model.pt
-
-Training completed.
-
---- TEST SET TEMPORAL METRICS (tau=0.25s) ---
-Validation Box Detections: 10236
-True Annotations Mapped:   4272
-
-True Positives (TP):  1024
-False Positives (FP): 9212
-False Negatives (FN): 3248
-
-Precision: 0.1000
-Recall:    0.2397
-F1-Score:  0.1412
--------------------------------------------
-Total Objective Loss: 0.8108

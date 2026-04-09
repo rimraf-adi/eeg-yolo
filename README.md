@@ -139,18 +139,22 @@ Practical starting range:
 The training pipeline stores annotation timestamps as absolute seconds, then converts them to window-relative positions at target build time.
 
 1. Parsing step (`parse_annotations`):
+
 - Keeps only `!`, `!start`, `!end`.
 - Stores absolute time in `t_center_abs`.
 
 2. Window filtering step (`build_target`):
+
 - For a window `[t_win_start, t_win_end)`, an event is used only if:
   - `t_win_start <= t_center_abs < t_win_end`
 
 3. Relative conversion:
+
 - `rel_center = (t_center_abs - t_win_start) / window_size_sec`
 - This gives a normalized position in `[0, 1)` inside the current window.
 
 4. Grid assignment:
+
 - `cell_idx = floor(rel_center * S)`
 - `cell_offset = (rel_center * S) - cell_idx`
 - Target values set at `target[cell_idx]`:
@@ -161,17 +165,20 @@ The training pipeline stores annotation timestamps as absolute seconds, then con
 ### Worked Example
 
 Given:
+
 - `window_size_sec = 10.0`
 - `S = 200` cells (`0.05s` per cell)
 - Event timestamp: `t_center_abs = 11.842s`
 - Window: `[10.0, 20.0)`
 
 Compute:
+
 - `rel_center = (11.842 - 10.0) / 10.0 = 0.1842`
 - `cell_idx = floor(0.1842 * 200) = floor(36.84) = 36`
 - `cell_offset = 36.84 - 36 = 0.84`
 
 So the target row for this event is written to cell `36` with:
+
 - objectness `1.0`
 - offset `0.84`
 - class one-hot for label `!` (class id `0`)

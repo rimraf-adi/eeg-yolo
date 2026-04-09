@@ -10,7 +10,7 @@ import torch
 from torch.utils.data import Dataset
 
 from src.training.annotation_parser import parse_annotations
-from src.training.target_builder import build_target
+from src.training.target_builder import build_target, build_target_soft
 
 logger = logging.getLogger(__name__)
 
@@ -20,25 +20,27 @@ class EEGRegressionDataset(Dataset):
     Transforms raw 29-channel EEG signals into an 18-channel Bipolar Subtracted Tensor.
     Converts timestamp annotations into strict S-segment Grid bounding box targets.
     """
-    def __init__(self, data_dir, anno_dir, window_size_sec=10.0, stride_sec=10.0, fs=500, S=100, num_classes=3, allowed_pids=None):
+    def __init__(self, data_dir, anno_dir, window_size_sec=10.0, stride_sec=10.0, fs=500, S=100, num_classes=3, allowed_pids=None, input_mode="1d", target_mode="hard", target_config=None):
         self.data_dir = Path(data_dir)
         self.anno_dir = Path(anno_dir)
         self.window_size_sec = float(window_size_sec)
         self.stride_sec = float(stride_sec)
         self.fs = int(fs)
         self.S = int(S)
+        self.input_mode = str(input_mode).lower()
+        self.target_mode = str(target_mode).lower()
+        self.target_config = dict(target_config or {})
         self.cell_duration = self.window_size_sec / self.S
         
         # Exact mathematical samples mapped internally
         raw_samples = int(self.window_size_sec * self.fs)
-        
-        # PyTorch YOLO FPN inherently halves sizes across 5 pooling stages (2^5 = 32 grids). 
-        # Sequences must natively align mathematically strictly maintaining multiples of 32 to skip tensor dimension crashes!
-        self.window_samples = int(math.ceil(raw_samples / 32) * 32)
+
+        # Keep the time axis exact so the model sees the intended window length.
+        self.window_samples = raw_samples
         self.stride_samples = int(self.stride_sec * self.fs)
         
-        # 1. Global Setup — class mapping handled by annotation_parser:
-        #    Sleeping=0, !=1, !start/!end segments=2
+        # 1. Global Setup — point classes handled by annotation_parser:
+        #    !=0, !start=1, !end=2
         self.num_classes = int(num_classes)
         
         # Explicit Bipolar Pair Matrix mapping directly from the 29-channel layout
@@ -73,7 +75,7 @@ class EEGRegressionDataset(Dataset):
     def _load_and_build(self, allowed_pids):
         parquet_files = sorted(glob.glob(str(self.data_dir / "*.parquet")))
         
-        print(f"🔵 Scanning Dataset... Analyzing extracted events natively.")
+        print(f"[*] Scanning Dataset... Analyzing extracted events natively.")
         for pq_path in parquet_files:
             pid = os.path.basename(pq_path).replace('.parquet', '')
             
@@ -106,8 +108,8 @@ class EEGRegressionDataset(Dataset):
                     
                 self.eeg_cache[pid] = bipolar_data
                 
-                # Parse annotations using dedicated parser (handles segment pairing,
-                # correct class mapping: Sleeping=0, !=1, !start/!end segments=2)
+                # Parse annotations using dedicated parser (keeps only the three active
+                # point labels: !, !start, and !end)
                 events_df = parse_annotations(str(events_csv))
                 self.events_cache[pid] = events_df
                 
@@ -167,11 +169,13 @@ class EEGRegressionDataset(Dataset):
         norm_x = (padded_x - mean) / std
         
         X_tensor = torch.tensor(norm_x, dtype=torch.float32)
+        if self.input_mode == "2d":
+            X_tensor = X_tensor.unsqueeze(0)
         
         # ---------------------------------------------------------
         # Target Tensor Construction (Y) via build_target
         # Uses parsed annotations with correct class mapping:
-        #   Sleeping=0, !=1, !start/!end segments=2
+        #   !=0, !start=1, !end=2
         # All timestamps are relativized to the window start.
         # ---------------------------------------------------------
         config = {
@@ -179,7 +183,11 @@ class EEGRegressionDataset(Dataset):
             'window_size_sec': self.window_size_sec,
             'num_classes': self.num_classes,
         }
+        config.update(self.target_config)
         annotations_df = self.events_cache[pid]
-        Y_tensor = build_target(annotations_df, start_time, end_time, config)
+        if self.target_mode == "soft":
+            Y_tensor = build_target_soft(annotations_df, start_time, end_time, config)
+        else:
+            Y_tensor = build_target(annotations_df, start_time, end_time, config)
         
         return X_tensor, Y_tensor
