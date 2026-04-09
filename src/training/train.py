@@ -139,34 +139,69 @@ def extract_events_from_grid(tensor, conf_threshold=0.5, cell_duration=0.05, num
     return batch_events
 
 
-def extract_peak_events_from_grid(tensor, conf_threshold=0.5, cell_duration=0.05, num_classes=3, is_logits=False):
-    """Extract one event per local peak in objectness for soft targets or softened predictions."""
+def extract_peak_events_from_grid(
+    tensor,
+    conf_threshold=0.5,
+    cell_duration=0.05,
+    num_classes=3,
+    is_logits=False,
+    suppression_radius_cells=3,
+    min_peak_prominence=0.02,
+):
+    """Extract one event per dominant peak in objectness and suppress nearby duplicates.
+
+    The old peak check treated every local bump as a separate detection. This version first
+    filters candidate peaks by threshold/prominence, then greedily keeps the strongest peak
+    and suppresses nearby candidates inside a small radius.
+    """
     B, S = tensor.size(0), tensor.size(1)
     batch_events = []
 
+    suppression_radius_cells = max(0, int(suppression_radius_cells))
+    min_peak_prominence = max(0.0, float(min_peak_prominence))
+
     for b in range(B):
-        events = []
+        candidates = []
         for i in range(S):
             obj_val = tensor[b, i, 0]
             p_c = torch.sigmoid(obj_val).item() if is_logits else obj_val.item()
+            if p_c < conf_threshold:
+                continue
+
             left_val = tensor[b, i - 1, 0] if i > 0 else obj_val
             right_val = tensor[b, i + 1, 0] if i + 1 < S else obj_val
             left_p = torch.sigmoid(left_val).item() if is_logits else left_val.item()
             right_p = torch.sigmoid(right_val).item() if is_logits else right_val.item()
+            neighbor_max = max(left_p, right_p)
 
-            if p_c < conf_threshold:
-                continue
+            # Keep only genuine peaks with a small prominence margin.
             if p_c < left_p or p_c < right_p:
+                continue
+            if (p_c - neighbor_max) < min_peak_prominence:
                 continue
 
             offset_val = tensor[b, i, 1]
             t_x = torch.sigmoid(offset_val).item() if is_logits else offset_val.item()
             cls_probs = tensor[b, i, 2:2 + num_classes]
             class_id = torch.argmax(cls_probs).item()
-            time_rel = (i * cell_duration) + (t_x * cell_duration)
-            events.append({'time': time_rel, 'class': class_id, 'conf': p_c})
+            candidates.append({
+                'index': i,
+                'time': (i * cell_duration) + (t_x * cell_duration),
+                'class': class_id,
+                'conf': p_c,
+            })
 
-        batch_events.append(events)
+        candidates.sort(key=lambda x: x['conf'], reverse=True)
+        selected = []
+        for candidate in candidates:
+            if any(abs(candidate['index'] - chosen['index']) <= suppression_radius_cells for chosen in selected):
+                continue
+            selected.append(candidate)
+
+        batch_events.append([
+            {'time': item['time'], 'class': item['class'], 'conf': item['conf']}
+            for item in selected
+        ])
 
     return batch_events
 
