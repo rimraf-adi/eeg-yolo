@@ -375,6 +375,7 @@ def train(
     gaussian_radius_cells=3.0,
     soft_offset_mask_threshold=0.1,
     regression_metric_bins=15,
+    tau=1.0,
 ):
     # We natively isolated the dataset strictly from P001 to P082!
     EEG_IDX = list(range(1, 83))
@@ -578,7 +579,7 @@ def train(
                         batch_stats = calc_temporal_metrics(
                             preds,
                             y,
-                            tau=0.25,
+                            tau=tau,
                             conf_threshold=conf_threshold,
                             num_classes=num_classes,
                             cell_duration=cell_duration,
@@ -704,7 +705,7 @@ def train(
             batch_stats = calc_temporal_metrics(
                 preds,
                 y,
-                tau=0.25,
+                tau=tau,
                 conf_threshold=conf_threshold,
                 num_classes=num_classes,
                 cell_duration=cell_duration,
@@ -724,7 +725,7 @@ def train(
     if event_supervision == "soft" and test_batches > 0:
         test_reg_metrics = {key: value / test_batches for key, value in test_reg_stats.items()}
         
-    test_msg = (f"\n--- TEST SET TEMPORAL METRICS (tau=0.25s) ---\n"
+    test_msg = (f"\n--- TEST SET TEMPORAL METRICS (tau={tau}s) ---\n"
                 f"Validation Box Detections: {test_metrics['tp'] + test_metrics['fp']}\n"
                 f"True Annotations Mapped:   {test_metrics['tp'] + test_metrics['fn']}\n\n"
                 f"True Positives (TP):  {test_metrics['tp']}\n"
@@ -766,7 +767,7 @@ def train(
                 model,
                 test_loader,
                 device,
-                tau=0.25,
+                tau=tau,
                 conf_threshold=float(th),
                 num_classes=num_classes,
                 cell_duration=cell_duration,
@@ -829,4 +830,5 @@ if __name__ == '__main__':
         gaussian_radius_cells=TRAINING.get("gaussian_radius_cells", 3.0),
         soft_offset_mask_threshold=TRAINING.get("soft_offset_mask_threshold", 0.1),
         regression_metric_bins=TRAINING.get("regression_metric_bins", 15),
+        tau=DATASET.get("tau", 1.0),
     )

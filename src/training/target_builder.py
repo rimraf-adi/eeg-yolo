@@ -121,8 +121,12 @@ def build_target_soft(annotations_df, t_win_start, t_win_end, config):
 
             objectness[grid_idx] = max(objectness[grid_idx], weight)
             class_scores[grid_idx, class_id] = max(class_scores[grid_idx, class_id], weight)
-            offset_sum[grid_idx] += weight * cell_offset
-            offset_weight_sum[grid_idx] += weight
+            
+            # Only set offset for the center cell where the event actually is.
+            # Neighbors learn objectness and class but not offset to avoid incorrect localization.
+            if grid_idx == cell_idx:
+                offset_sum[grid_idx] += weight * cell_offset
+                offset_weight_sum[grid_idx] += weight
 
     target[:, 0] = torch.from_numpy(objectness)
     offset_target = np.zeros(S, dtype=np.float32)

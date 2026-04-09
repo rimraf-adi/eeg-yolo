@@ -8,3 +8,8 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Model files and outputs (large/volatile)
+*.pt
+results*.txt
+results_*.txt

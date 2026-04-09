@@ -12,13 +12,13 @@ model_1d = yolo_1d_v11_n(in_channels=18, S=200)
 
 # Fake Tensor input identically matching X: [Batch, Channels, Length]
 dummy_x_1d = torch.randn(2, 18, 5000)
-# Fake Tensor Target identically matching Y: [Batch, S, 1, 5]
-dummy_y = torch.zeros(2, 200, 1, 5)
+# Fake Tensor Target identically matching Y: [Batch, S, 5]
+dummy_y = torch.zeros(2, 200, 5)
 
 # Insert a dummy spatial object logically
-dummy_y[0, 100, 0, 0] = 1.0 # obj
-dummy_y[0, 100, 0, 1] = 0.5 # tx
-dummy_y[0, 100, 0, 3] = 1.0 # cls
+dummy_y[0, 100, 0] = 1.0 # obj
+dummy_y[0, 100, 1] = 0.5 # tx
+dummy_y[0, 100, 3] = 1.0 # cls
 
 print(f"Feeding shape X (1D): {dummy_x_1d.shape}")
 preds_1d = model_1d(dummy_x_1d)

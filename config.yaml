@@ -58,7 +58,7 @@ model:
 
 dataset:
   window_size_sec: 10.0
-  stride_sec: 0.5
+  stride_sec: 4.0
   fs: 500
   S: 200
   tau: 1
