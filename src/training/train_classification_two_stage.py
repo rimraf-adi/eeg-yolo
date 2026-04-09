@@ -8,7 +8,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 from tqdm import tqdm
 
 from src.config import DATASET, MODEL, PATHS, TRAINING
@@ -276,6 +276,29 @@ def build_class_weights(counts):
     return torch.tensor(weights, dtype=torch.float32)
 
 
+def build_sample_weights(samples, counts):
+    counts = np.maximum(np.asarray(counts, dtype=np.float64), 1.0)
+    inv = 1.0 / counts
+    return np.array([inv[int(s["label"])] for s in samples], dtype=np.float64)
+
+
+class FocalCrossEntropyLoss(nn.Module):
+    def __init__(self, alpha=None, gamma=2.0):
+        super().__init__()
+        self.gamma = float(gamma)
+        self.alpha = alpha
+
+    def forward(self, logits, targets):
+        ce = nn.functional.cross_entropy(logits, targets, reduction="none")
+        pt = torch.exp(-ce)
+        focal = (1.0 - pt) ** self.gamma
+        loss = focal * ce
+        if self.alpha is not None:
+            alpha = self.alpha.to(logits.device)
+            loss = alpha[targets] * loss
+        return loss.mean()
+
+
 def update_confusion(conf, y_true, y_pred, num_classes):
     for t, p in zip(y_true, y_pred):
         conf[int(t)][int(p)] += 1
@@ -334,6 +357,15 @@ def evaluate(model, loader, device, criterion, labels_map, n_classes):
             update_confusion(conf, y.detach().cpu().numpy(), pred.detach().cpu().numpy(), n_classes)
 
     metrics = metrics_from_confusion(conf, labels_map, n_classes)
+    if int(n_classes) == 3:
+        # Explicitly track rare-event quality to prevent silent collapse to class '!'.
+        rare_f1 = np.mean([
+            metrics["per_class"][1]["f1"],
+            metrics["per_class"][2]["f1"],
+        ])
+        metrics["rare_f1"] = float(rare_f1)
+    else:
+        metrics["rare_f1"] = metrics["macro_f1"]
     metrics["loss"] = total_loss / max(1, len(loader))
     return metrics
 
@@ -401,7 +433,16 @@ def train_stage(
     counts = train_ds.class_counts(out_classes)
     class_weights = build_class_weights(counts)
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=0)
+    if stage_name == "event":
+        sample_weights = build_sample_weights(train_ds.samples, counts)
+        sampler = WeightedRandomSampler(
+            weights=torch.tensor(sample_weights, dtype=torch.double),
+            num_samples=len(sample_weights),
+            replacement=True,
+        )
+        train_loader = DataLoader(train_ds, batch_size=batch_size, sampler=sampler, num_workers=0)
+    else:
+        train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=0)
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=0)
     test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=0)
 
@@ -415,7 +456,10 @@ def train_stage(
         grid_S=grid_S,
     ).to(device)
 
-    criterion = nn.CrossEntropyLoss(weight=class_weights.to(device), label_smoothing=0.02)
+    if stage_name == "event":
+        criterion = FocalCrossEntropyLoss(alpha=class_weights.to(device), gamma=2.0)
+    else:
+        criterion = nn.CrossEntropyLoss(weight=class_weights.to(device), label_smoothing=0.02)
     optimizer = optim.AdamW(model.parameters(), lr=lr)
 
     header = (
@@ -456,14 +500,29 @@ def train_stage(
         line = (
             f"epoch={epoch} train_loss={train_loss:.4f} val_loss={val_metrics['loss']:.4f} "
             f"val_acc={val_metrics['accuracy']:.4f} val_macro_f1={val_metrics['macro_f1']:.4f} "
-            f"val_weighted_f1={val_metrics['weighted_f1']:.4f}"
+            f"val_weighted_f1={val_metrics['weighted_f1']:.4f} val_rare_f1={val_metrics['rare_f1']:.4f}"
         )
         print(line)
         with open(results_file, "a", encoding="utf-8") as f:
             f.write(line + "\n")
 
-        if val_metrics["macro_f1"] > best_val:
-            best_val = val_metrics["macro_f1"]
+        if out_classes == 3:
+            c0 = val_metrics["per_class"][0]["f1"]
+            c1 = val_metrics["per_class"][1]["f1"]
+            c2 = val_metrics["per_class"][2]["f1"]
+            cls_line = f"    val_class_f1: !={c0:.4f} !start={c1:.4f} !end={c2:.4f}"
+            print(cls_line)
+            with open(results_file, "a", encoding="utf-8") as f:
+                f.write(cls_line + "\n")
+
+        # For event stage, prioritize rare classes so checkpointing does not favor collapse.
+        if out_classes == 3:
+            model_score = 0.7 * val_metrics["rare_f1"] + 0.3 * val_metrics["macro_f1"]
+        else:
+            model_score = val_metrics["macro_f1"]
+
+        if model_score > best_val:
+            best_val = model_score
             wait = 0
             torch.save(model.state_dict(), best_path)
         else:
