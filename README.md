@@ -199,12 +199,14 @@ Five critical bugs were identified and fixed that were causing severe F1 score d
 The configuration file specifies `tau: 1` (1 second temporal tolerance), which is clinically reasonable for neonatal EEG seizure detection. However, this value was **never read from the config** and was instead hardcoded to `tau=0.25` seconds in multiple locations inside `src/training/train.py`.
 
 **Impact:**
+
 - Predictions that matched within the clinically appropriate 1.0-second window were being rejected as false positives/false negatives
 - Example: A detection 0.6 seconds away from the ground truth would be counted as **both FP and FN** due to the 0.25s threshold
 - This double-penalty mechanism directly destroyed the F1 score despite valid model predictions
 - **Observed F1 score**: ~0.2 (unacceptably low)
 
 **Root Cause:**
+
 ```python
 # Lines 279, 299, 581, 707, 769 in train.py - HARDCODED tau:
 def calc_temporal_metrics(..., tau=0.25, ...):  # DEFAULT HARDCODED
@@ -213,6 +215,7 @@ batch_stats = calc_temporal_metrics(preds, y, tau=0.25, ...)  # HARDCODED AT CAL
 ```
 
 **Solution Applied:**
+
 1. Added `tau` as a parameter to the `train()` function signature (line 378)
 2. Replaced all 4 hardcoded `tau=0.25` instances with the dynamic `tau` variable:
    - Line 581 (validation hard-supervision mode)
@@ -222,10 +225,12 @@ batch_stats = calc_temporal_metrics(preds, y, tau=0.25, ...)  # HARDCODED AT CAL
 4. Modified the `__main__` block to read tau from config: `tau=DATASET.get("tau", 1.0)`
 
 **Code Changes:**
+
 - **File:** `src/training/train.py`
 - **Lines modified:** 378 (signature), 581, 707, 727, 769, 836 (config read)
 
 **Result:**
+
 - Temporal tolerance now correctly reads from `config.yaml` (1.0 second)
 - Clinically reasonable matching window allows valid near-miss detections
 - **Expected F1 improvement:** Significant (from ~0.2 to ~0.6-0.8 range depending on model quality)
@@ -238,6 +243,7 @@ batch_stats = calc_temporal_metrics(preds, y, tau=0.25, ...)  # HARDCODED AT CAL
 When Gaussian soft supervision spreads supervision across neighboring cells (within radius=3 cells), the implementation incorrectly copied the center cell's fractional offset to all neighbors.
 
 **Impact:**
+
 - **Example:** True event at grid position 36.84 (cell 36 with offset 0.84)
   - Center cell (36): Learns offset 0.84 ✓ Correct
   - Neighbor cell (35): Learns offset 0.84 ✗ **WRONG** → model predicts position 35.84 instead of 36.84
@@ -246,12 +252,13 @@ When Gaussian soft supervision spreads supervision across neighboring cells (wit
 - Heavily confuses offset loss optimization and creates systematic bias in localization
 
 **Root Cause:**
+
 ```python
 # src/training/target_builder.py - BUGGY LOGIC:
 for grid_idx in range(left, right + 1):
     distance_cells = grid_idx - cell_pos
     weight = _gaussian_weight(distance_cells, sigma_cells)
-    
+
     objectness[grid_idx] = max(objectness[grid_idx], weight)  # ✓ CORRECT
     class_scores[grid_idx, class_id] = max(class_scores[grid_idx, class_id], weight)  # ✓ CORRECT
     offset_sum[grid_idx] += weight * cell_offset  # ✗ WRONG: Applies to ALL cells
@@ -266,10 +273,10 @@ Added a guard to only update offset for the center cell where the event actually
 for grid_idx in range(left, right + 1):
     distance_cells = grid_idx - cell_pos
     weight = _gaussian_weight(distance_cells, sigma_cells)
-    
+
     objectness[grid_idx] = max(objectness[grid_idx], weight)
     class_scores[grid_idx, class_id] = max(class_scores[grid_idx, class_id], weight)
-    
+
     # Only set offset for the center cell where the event actually is.
     # Neighbors learn objectness and class but not offset to avoid incorrect localization.
     if grid_idx == cell_idx:
@@ -278,10 +285,12 @@ for grid_idx in range(left, right + 1):
 ```
 
 **Code Changes:**
+
 - **File:** `src/training/target_builder.py`, lines 127-128
 - **Added condition:** `if grid_idx == cell_idx:` wraps offset updates
 
 **Result:**
+
 - Only the true center cell learns offset predictions
 - Neighbor cells learn strong objectness/class signals but keep offset=0 (untrained)
 - Prevents 1+ cell localization errors during inference
@@ -295,6 +304,7 @@ for grid_idx in range(left, right + 1):
 The configuration specified `stride_sec: 0.5` on 10-second windows, creating ~20 nearly-identical copies of the same EEG signal in the training dataloader across different windows. This massive overlap causes:
 
 **Impact:**
+
 - **Redundancy factor:** 20x (same signal appears in 20 different training samples)
 - **Training speed penalty:** Epochs run ~20x slower than necessary
 - **Feature representation bias:** The same time-series features are over-represented, reducing effective dataset diversity
@@ -302,17 +312,19 @@ The configuration specified `stride_sec: 0.5` on 10-second windows, creating ~20
 - **Computational waste:** 4-5x longer training times with minimal information gain
 
 **Mathematical Analysis:**
+
 - Window size: 10.0 seconds
 - Original stride: 0.5 seconds
 - Overlap per window: `(10.0 - 0.5) / 10.0 = 0.95 = 95%`
 - Number of samples: `dataset_duration / stride = total_seconds / 0.5`
 
 **Root Cause:**
+
 ```yaml
 # config.yaml - EXCESSIVE STRIDE:
 dataset:
   window_size_sec: 10.0
-  stride_sec: 0.5  # Creates 20x overlap
+  stride_sec: 0.5 # Creates 20x overlap
 ```
 
 **Solution Applied:**
@@ -322,20 +334,23 @@ Updated stride to 2.0 seconds:
 # FIXED config.yaml:
 dataset:
   window_size_sec: 10.0
-  stride_sec: 2.0  # Reduces overlap to ~5x
+  stride_sec: 2.0 # Reduces overlap to ~5x
 ```
 
 **Trade-off Analysis:**
+
 - **Overlap reduction:** 20x → 5x (4x improvement)
 - **Training speed:** ~4x faster per epoch
 - **Evaluation quality trade-off:** For validation/test, we keep dense strides in the evaluation loop (not specified in config, can be controlled separately if needed)
 - **Information retention:** With 5x overlap, each event still appears in ~5 windows, maintaining temporal context
 
 **Code Changes:**
+
 - **File:** `config.yaml`, line 69
 - **Change:** `stride_sec: 0.5` → `stride_sec: 2.0`
 
 **Result:**
+
 - **Training time:** 4x faster per epoch
 - **Dataset samples:** Reduced from ~78,861 to ~19,715 training windows (~25% of original)
 - **Effective diversity:** 4x improvement in unique signal content per epoch
@@ -348,11 +363,13 @@ dataset:
 The test script `test_model.py` was using a legacy target shape `[B, S, 1, 5]` while the actual training code generates targets with shape `[B, S, 5]`. This shape mismatch caused the loss function to crash when running tests.
 
 **Impact:**
+
 - Test script fails with shape error when computing loss
 - Users cannot verify model compilation without errors
 - Regression during development not caught
 
 **Root Cause:**
+
 ```python
 # test_model.py - LEGACY SHAPE:
 dummy_y = torch.zeros(2, 200, 1, 5)  # [B, S, 1, 5] - WRONG
@@ -377,11 +394,13 @@ dummy_y[0, 100, 3] = 1.0  # cls
 ```
 
 **Code Changes:**
+
 - **File:** `test_model.py`, lines 8-13
 - **Dimensions:** `[2, 200, 1, 5]` → `[2, 200, 5]`
 - **Indexing:** 4D indices → 3D indices
 
 **Verification:**
+
 ```
 ✓ YOLO1D: input [2, 18, 5000] → output [2, 200, 5] ✓ Loss computed: 0.6521
 ✓ YOLO2D: input [2, 1, 18, 5000] → output [2, 200, 5] ✓ Loss computed: 0.6798
@@ -389,6 +408,7 @@ dummy_y[0, 100, 3] = 1.0  # cls
 ```
 
 **Result:**
+
 - Test script now passes for both 1D and 2D models
 - Model builders can quickly verify architecture integrity
 - Shape consistency maintained between data pipeline and model output
@@ -401,6 +421,7 @@ dummy_y[0, 100, 3] = 1.0  # cls
 Model files (`*.pt`) and training output logs (`results*.txt`) were being tracked by git, causing repository bloat and making the repo unsuitable for sharing/distribution.
 
 **Impact:**
+
 - Repository size inflated by model files (typically 50-500 MB)
 - Every new model training creates new commits with large files
 - Slow clones and pulls for users
@@ -416,16 +437,19 @@ results*.txt            # Training output and logs
 ```
 
 **Code Changes:**
+
 - **File:** `.gitignore`
 - **Added patterns:** `*.pt`, `results*.txt`
 
 **Cleanup:**
+
 - Removed `best_model.pt` and `results.txt` from git tracking
 - Removed obsolete test output files: `results_quickcheck.txt`, `results_sweepcheck.txt`
 - Removed deprecated test script: `test_loader.py` (had hardcoded paths)
 - Removed debugging script: `verify_config.py`
 
 **Result:**
+
 - Repository remains lean and focused on code
 - Users can work with their own trained models locally
 - Clean commit history for reproducibility
@@ -434,13 +458,13 @@ results*.txt            # Training output and logs
 
 ### **Summary Table**
 
-| Bug # | Issue | Severity | Fix | Impact |
-|-------|-------|----------|-----|--------|
-| 1 | Hardcoded tau=0.25 | **CRITICAL** | Add tau parameter, read from config | F1 score: ~0.2 → expected ~0.6-0.8 |
-| 2 | Soft offset corruption | **HIGH** | Guard offset updates to center cell | Offset accuracy: ±1+ cells → ±0 cells error |
-| 3 | 20x stride redundancy | **HIGH** | stride_sec: 0.5 → 2.0 | Training speed: 4x faster, 75% fewer samples |
-| 4 | Shape mismatch [B,S,1,5] | **MEDIUM** | Fix to [B,S,5] | Test script now runs without shape errors |
-| 5 | Repo bloat from *.pt files | **MEDIUM** | Update .gitignore | Repository size reduced, cleaner tracking |
+| Bug # | Issue                       | Severity     | Fix                                 | Impact                                       |
+| ----- | --------------------------- | ------------ | ----------------------------------- | -------------------------------------------- |
+| 1     | Hardcoded tau=0.25          | **CRITICAL** | Add tau parameter, read from config | F1 score: ~0.2 → expected ~0.6-0.8           |
+| 2     | Soft offset corruption      | **HIGH**     | Guard offset updates to center cell | Offset accuracy: ±1+ cells → ±0 cells error  |
+| 3     | 20x stride redundancy       | **HIGH**     | stride_sec: 0.5 → 2.0               | Training speed: 4x faster, 75% fewer samples |
+| 4     | Shape mismatch [B,S,1,5]    | **MEDIUM**   | Fix to [B,S,5]                      | Test script now runs without shape errors    |
+| 5     | Repo bloat from \*.pt files | **MEDIUM**   | Update .gitignore                   | Repository size reduced, cleaner tracking    |
 
 ---
 
@@ -474,14 +498,14 @@ Current `config.yaml` reflects all improvements:
 
 ```yaml
 dataset:
-  window_size_sec: 10.0   # 10-second windows (fixed)
-  stride_sec: 2.0         # Reduced from 0.5 (4x faster training)
-  fs: 500                 # 500 Hz sampling
-  S: 200                  # 200 temporal bins (0.05s per bin)
-  tau: 1                  # 1.0 second temporal tolerance (now used!)
+  window_size_sec: 10.0 # 10-second windows (fixed)
+  stride_sec: 2.0 # Reduced from 0.5 (4x faster training)
+  fs: 500 # 500 Hz sampling
+  S: 200 # 200 temporal bins (0.05s per bin)
+  tau: 1 # 1.0 second temporal tolerance (now used!)
 
 training:
-  event_supervision: soft  # Gaussian soft targets with fixed offsets
+  event_supervision: soft # Gaussian soft targets with fixed offsets
   gaussian_sigma_cells: 1.0
   gaussian_radius_cells: 3.0
 ```

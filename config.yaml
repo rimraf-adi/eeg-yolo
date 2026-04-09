@@ -22,7 +22,7 @@ training:
   epochs: 50
   batch_size: 128
   learning_rate: 0.001
-  patience: 5
+  patience: 15
   results_file: "results.txt"
   conf_threshold: 0.35
   obj_pos_weight: 12.0
@@ -57,8 +57,8 @@ model:
   num_classes: 3
 
 dataset:
-  window_size_sec: 10.0
-  stride_sec: 4.0
+  window_size_sec: 5.0
+  stride_sec: 2.5
   fs: 500
-  S: 200
+  S: 100
   tau: 1
