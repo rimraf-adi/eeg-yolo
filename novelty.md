@@ -79,4 +79,106 @@ Traditional sliding-window F1-scores fail to measure boundary precision. We will
 | **4** | Metric pipeline overhaul (mAP@tIoU) | Low | Essential for proving the efficacy of the method to reviewers. |
 | **5** | EEG-DETR (Query-based architecture) | High | Future work / secondary paper once dataset size is scaled. |
 
-By the way, to unlock the full functionality of all Apps, enable [Gemini Apps Activity](https://myactivity.google.com/product/gemini).
+Let me think about this properly before searching.Good, now I have a solid picture. Here's a structured breakdown of genuinely novel directions you could take, grounded in what the literature is and isn't doing.
+
+---
+
+## The Core Insight First
+
+Before novel ideas: your labels are actually very valuable in a way you haven't exploited yet. You have **three annotation types that carry structural clinical information**:
+
+- `!` = "something epileptiform happened here" (dense, local)
+- `!start` = "a seizure is beginning" (extremely sparse, transitional)
+- `!end` = "a seizure is ending" (extremely sparse, transitional)
+
+The relationship between these three is **sequential and causal** — a `!start` must precede `!end`, spikes often cluster before `!start` and thin out after `!end`. No current model exploits this structure. That's your white space.
+
+---
+
+## Novel Idea 1: Spike Rate as a Seizure Precursor Signal
+
+**What it is:** Don't try to detect `!start` directly. Instead, model the **density of `!` spikes over time** as a continuous signal, and detect the phase transitions in that signal.
+
+**The insight from literature:** Hybrid CNN-LSTM models assign epileptogenic zone likelihood scores by linking high-frequency oscillation density with seizure onset propagation. The same logic applies to your data — spike density is a proxy for seizure state.
+
+**How to implement it:**
+1. Train a reliable binary `!` spike detector (simpler problem, more data)
+2. Compute a **spike rate timeseries** over a rolling window (e.g. spikes/10s)
+3. Train a second model on the spike rate signal to detect the phase transition — sudden rise = `!start`, gradual fall = `!end`
+4. This is a 1D changepoint detection problem on a derived signal, which is far simpler than raw EEG
+
+**Why it's novel:** Nobody in the IED literature uses spike rate dynamics as the input to onset/offset detection. They either do raw EEG → binary seizure, or raw EEG → onset. The two-stage spike-rate approach is new.
+
+---
+
+## Novel Idea 2: Exploit Label Noise as a Feature, Not a Problem
+
+**What it is:** Inter-rater agreement among clinicians interpreting EEG data hovers around 60%, and research showed that the performance of AI models may plateau on widely used datasets due to this variability. Your labels have the same uncertainty — but you can turn this into a feature.
+
+BUNDL (Bayesian Uncertainty-aware Deep Learning) introduces a probabilistic training framework that models uncertainty-informed label transitions. Around the onset region — 30 seconds before annotated onset — the framework determines clinician labels to be false positives with 0.21 probability, reflecting the ambiguous seizure start.
+
+**Your novel angle:** Rather than treating `!start` as a hard point label, model it as a **soft temporal distribution** — a Gaussian centered at the annotated time with learned width. This reframes the impossibly hard "predict the exact onset second" into the more tractable "predict that onset is likely somewhere in this 5-second window." The width of the learned distribution is itself a clinically meaningful output (uncertainty quantification).
+
+**Why it's novel:** BUNDL applies this to seizure intervals. Nobody has applied Bayesian soft labels specifically to **onset/offset point events** in neonatal EEG, which is your exact setting.
+
+---
+
+## Novel Idea 3: Structured State Machine Loss
+
+**What it is:** Add a **temporal consistency loss** that enforces the biological constraint that events must follow the order: `background → !start → (spikes) → !end → background`.
+
+Current models treat every window independently. They can predict `!end` before `!start`, which is clinically impossible. You can penalize this.
+
+**How to implement it:**
+- Train a model that outputs a state probability at each timestep: `P(background)`, `P(interictal)`, `P(ictal)`
+- Add a loss term penalizing invalid state transitions (e.g. `ictal → background` without `!end`, `!end` without a prior `!start`)
+- This is essentially a Neural HMM or a CRF layer on top of a CNN encoder
+
+**Why it's novel:** SZTrack learns solely from annotations of seizure onset and offset intervals, producing temporally contiguous predictions, but does not enforce structural constraints on the valid ordering of events. Explicit structural constraints on event ordering is not done in any current EEG seizure paper.
+
+---
+
+## Novel Idea 4: Semi-supervised Learning from the Unlabeled Majority
+
+**What it is:** You have a massive amount of background EEG (`none` windows = 98% of data) that is labeled but effectively unused as a learning signal. Use it for **self-supervised pretraining**.
+
+**How to implement it:**
+1. Train a masked autoencoder on raw EEG (mask random time segments, reconstruct them)
+2. The model learns what "normal" EEG looks like
+3. Fine-tune the encoder on your labeled event data — now the model already knows what background looks like, so the event signal is much clearer
+4. High reconstruction error at inference time = anomaly = candidate event
+
+A 2024 study on neonatal EEG found that greater performance gains come from harnessing the latest deep learning architectural advances than from using a larger training dataset when using AUC as a metric — but the best performance combines both.
+
+**Why it's novel:** Masked autoencoders for EEG pretraining followed by point-event fine-tuning hasn't been applied to the neonatal IED detection problem. The reconstruction-error-as-anomaly-signal is a clean, publishable contribution.
+
+---
+
+## Novel Idea 5: Reframe as Duration Regression, Not Boundary Classification
+
+**What it is:** Instead of classifying `!start` and `!end` separately, train a model that, **given a detected spike cluster**, predicts:
+- **Seizure duration** (single scalar regression)
+- **Time to next spike** (inter-spike interval regression)
+
+This completely avoids the sparse class problem. Duration regression from spike context is a much better-posed problem than "find the exact onset second."
+
+**How to implement:**
+- Window centered on each detected `!` spike
+- Predict: "is this spike part of a seizure? If yes, how far are we from the start? How far are the we from the end?"
+- These are regression targets, not classification, so they don't suffer from class imbalance
+
+**Why it's novel:** The field does binary seizure detection or onset localization. **Relative temporal regression from detected spikes** — predicting seizure phase as a continuous variable — is not done in any paper in the current literature.
+
+---
+
+## Honest Ranking by Feasibility vs. Novelty
+
+| Idea | Feasibility | Novelty | Best for |
+|---|---|---|---|
+| Spike rate → transition detection | ⭐⭐⭐⭐ | ⭐⭐⭐ | Getting something working fast |
+| Soft Bayesian labels | ⭐⭐⭐ | ⭐⭐⭐⭐ | Publication |
+| State machine / CRF loss | ⭐⭐⭐ | ⭐⭐⭐⭐ | Publication |
+| Masked autoencoder pretraining | ⭐⭐⭐ | ⭐⭐⭐ | If you have compute |
+| Duration regression from spikes | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | Strongest novel framing |
+
+**If I had to pick one:** Idea 5 (duration regression) completely sidesteps your class imbalance problem, produces a clinically meaningful output, and has no direct prior work. Combine it with Idea 1 (spike rate) as the input signal and you have a genuinely novel two-stage system that doesn't rely on ever detecting `!start` and `!end` as independent classes.
