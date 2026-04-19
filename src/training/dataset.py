@@ -20,23 +20,25 @@ class EEGRegressionDataset(Dataset):
     Transforms raw 29-channel EEG signals into an 18-channel Bipolar Subtracted Tensor.
     Converts timestamp annotations into strict S-segment Grid bounding box targets.
     """
-    def __init__(self, data_dir, anno_dir, window_size_sec=10.0, stride_sec=10.0, fs=500, S=100, num_classes=3, allowed_pids=None, input_mode="1d", target_mode="hard", target_config=None):
+    def __init__(self, data_dir, anno_dir, window_size_sec=10.0, stride_sec=10.0, fs=500, S=100, num_classes=3, allowed_pids=None,
+                 input_mode="1d", target_mode="hard", target_config=None):
         self.data_dir = Path(data_dir)
         self.anno_dir = Path(anno_dir)
         self.window_size_sec = float(window_size_sec)
         self.stride_sec = float(stride_sec)
         self.fs = int(fs)
         self.S = int(S)
+        self.cell_duration = self.window_size_sec / self.S
         self.input_mode = str(input_mode).lower()
         self.target_mode = str(target_mode).lower()
-        self.target_config = dict(target_config or {})
-        self.cell_duration = self.window_size_sec / self.S
+        self.target_config = target_config or {}
         
         # Exact mathematical samples mapped internally
         raw_samples = int(self.window_size_sec * self.fs)
-
-        # Keep the time axis exact so the model sees the intended window length.
-        self.window_samples = raw_samples
+        
+        # PyTorch YOLO FPN inherently halves sizes across 5 pooling stages (2^5 = 32 grids). 
+        # Sequences must natively align mathematically strictly maintaining multiples of 32 to skip tensor dimension crashes!
+        self.window_samples = int(math.ceil(raw_samples / 32) * 32)
         self.stride_samples = int(self.stride_sec * self.fs)
         
         # 1. Global Setup — point classes handled by annotation_parser:
@@ -169,6 +171,8 @@ class EEGRegressionDataset(Dataset):
         norm_x = (padded_x - mean) / std
         
         X_tensor = torch.tensor(norm_x, dtype=torch.float32)
+
+        # Reshape for 2D model: [C, T] -> [1, C, T]
         if self.input_mode == "2d":
             X_tensor = X_tensor.unsqueeze(0)
         
@@ -183,8 +187,11 @@ class EEGRegressionDataset(Dataset):
             'window_size_sec': self.window_size_sec,
             'num_classes': self.num_classes,
         }
+        # Merge target_config (gaussian params etc.) into config for soft targets
         config.update(self.target_config)
+
         annotations_df = self.events_cache[pid]
+
         if self.target_mode == "soft":
             Y_tensor = build_target_soft(annotations_df, start_time, end_time, config)
         else:

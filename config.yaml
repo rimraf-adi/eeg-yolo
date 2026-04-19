@@ -25,7 +25,7 @@ training:
   patience: 15
   results_file: "results.txt"
   conf_threshold: 0.35
-  obj_pos_weight: 12.0
+  obj_pos_weight: 50.0
   val_metrics_every_n_epochs: 5
   event_supervision: soft
   gaussian_sigma_cells: 1.0

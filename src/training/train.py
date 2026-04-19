@@ -524,6 +524,60 @@ def train(
             f"Set dataset.S to {model_S} in config.yaml or make model head configurable."
         )
 
+    # ---- Diagnostic: verify normalization consistency ----
+    print("\n" + "="*50)
+    print("DIAGNOSTIC: Normalization & Config Verification")
+    print("="*50)
+    print(f"  model_mode={model_mode}, event_supervision={event_supervision}")
+    print(f"  S={S}, model_head_S={model_S}, cell_duration={cell_duration:.4f}s")
+    print(f"  obj_pos_weight={obj_pos_weight}")
+    print(f"  window_size_sec={window_size_sec}, stride_sec={stride_sec}")
+    print(f"  tau={tau}")
+
+    def _print_split_stats(loader, split_name, max_batches=3):
+        """Sample a few batches and print per-channel mean/std."""
+        all_x = []
+        for i, (x, y) in enumerate(loader):
+            if i >= max_batches:
+                break
+            all_x.append(x)
+        if not all_x:
+            print(f"  [{split_name}] No data available")
+            return
+        stacked = torch.cat(all_x, dim=0)
+        # For 2D input [B,1,C,T], squeeze to [B,C,T]
+        if stacked.ndim == 4:
+            stacked = stacked.squeeze(1)
+        ch_mean = stacked.mean(dim=(0, 2))
+        ch_std = stacked.std(dim=(0, 2))
+        print(f"  [{split_name}] input shape={tuple(stacked.shape)}")
+        print(f"  [{split_name}] per-channel mean (first 5): {ch_mean[:5].tolist()}")
+        print(f"  [{split_name}] per-channel std  (first 5): {ch_std[:5].tolist()}")
+        # Also check target objectness distribution
+        all_y = []
+        for i, (x, y) in enumerate(loader):
+            if i >= max_batches:
+                break
+            all_y.append(y)
+        targets = torch.cat(all_y, dim=0)
+        obj_vals = targets[..., 0]
+        pos_frac = (obj_vals > 0.0).float().mean().item()
+        print(f"  [{split_name}] target obj positive fraction: {pos_frac:.4f} (positive cells / total cells)")
+        if (obj_vals > 0.0).any() and (obj_vals < 1.0).any():
+            print(f"  [{split_name}] target uses SOFT objectness (values in (0,1) detected)")
+        elif (obj_vals == 1.0).any():
+            print(f"  [{split_name}] target uses HARD objectness (only 0.0 and 1.0)")
+        else:
+            print(f"  [{split_name}] target has NO positive cells!")
+
+    _print_split_stats(train_loader, "TRAIN")
+    _print_split_stats(val_loader, "VAL")
+    print("="*50 + "\n")
+
+    with open(results_file, "a") as f:
+        f.write(f"\nDiagnostic: model_mode={model_mode}, event_supervision={event_supervision}, "
+                f"S={S}, obj_pos_weight={obj_pos_weight}, tau={tau}\n\n")
+
     optimizer = optim.AdamW(model.parameters(), lr=lr)
 
     best_val_loss = float('inf')

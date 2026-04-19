@@ -7,98 +7,110 @@ Test PIDs: [80, 5, 55, 12, 70, 14, 18, 29, 32, 36, 4, 15, 82]
 
 Train Windows: 15877, Val Windows: 3935, Test Windows: 4398
 
+
+Diagnostic: model_mode=2d, event_supervision=soft, S=100, obj_pos_weight=50.0, tau=1
+
 Epoch 1/50:
-  [Train] Loss=2.2158 | Obj=0.2330
-  [Val]   Loss=2.0748
-  [Val:Regression] ObjMAE=0.0695 | ObjBrier=0.0163 | ObjECE=0.0621 | OffMAE=0.2150 | OffRMSE=0.2551 | ClsBrier=0.1151
+  [Train] Loss=3.9295 | Obj=0.5695
+  [Val]   Loss=3.7639
+  [Val:Regression] ObjMAE=0.1698 | ObjBrier=0.0599 | ObjECE=0.1644 | OffMAE=0.2199 | OffRMSE=0.2559 | ClsBrier=0.1135
   -> BEST! Saved weights to best_model.pt
 Epoch 2/50:
-  [Train] Loss=1.7719 | Obj=0.1693
-  [Val]   Loss=2.1561
+  [Train] Loss=3.3557 | Obj=0.4814
+  [Val]   Loss=3.7210
   [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
-  -> [No improvement: 1/15]
+  -> BEST! Saved weights to best_model.pt
 Epoch 3/50:
-  [Train] Loss=1.6876 | Obj=0.1568
-  [Val]   Loss=2.3535
+  [Train] Loss=3.1008 | Obj=0.4354
+  [Val]   Loss=3.5518
   [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
-  -> [No improvement: 2/15]
+  -> BEST! Saved weights to best_model.pt
 Epoch 4/50:
-  [Train] Loss=1.6122 | Obj=0.1453
-  [Val]   Loss=2.1124
+  [Train] Loss=2.9367 | Obj=0.4079
+  [Val]   Loss=3.4030
   [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
-  -> [No improvement: 3/15]
+  -> BEST! Saved weights to best_model.pt
 Epoch 5/50:
-  [Train] Loss=1.5082 | Obj=0.1329
-  [Val]   Loss=2.0076
-  [Val:Regression] ObjMAE=0.0537 | ObjBrier=0.0188 | ObjECE=0.0478 | OffMAE=0.1924 | OffRMSE=0.2457 | ClsBrier=0.0953
+  [Train] Loss=2.8090 | Obj=0.3863
+  [Val]   Loss=3.3445
+  [Val:Regression] ObjMAE=0.0807 | ObjBrier=0.0297 | ObjECE=0.0755 | OffMAE=0.2012 | OffRMSE=0.2480 | ClsBrier=0.0939
   -> BEST! Saved weights to best_model.pt
 Epoch 6/50:
-  [Train] Loss=1.4981 | Obj=0.1323
-  [Val]   Loss=2.1032
+  [Train] Loss=2.6660 | Obj=0.3600
+  [Val]   Loss=3.6867
   [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
   -> [No improvement: 1/15]
 Epoch 7/50:
-  [Train] Loss=1.3675 | Obj=0.1177
-  [Val]   Loss=2.0626
+  [Train] Loss=2.6040 | Obj=0.3521
+  [Val]   Loss=3.5589
   [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
   -> [No improvement: 2/15]
 Epoch 8/50:
-  [Train] Loss=1.3244 | Obj=0.1135
-  [Val]   Loss=2.0323
+  [Train] Loss=2.5188 | Obj=0.3372
+  [Val]   Loss=3.8744
   [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
   -> [No improvement: 3/15]
 Epoch 9/50:
-  [Train] Loss=1.2705 | Obj=0.1086
-  [Val]   Loss=1.9343
-  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
-  -> BEST! Saved weights to best_model.pt
-Epoch 10/50:
-  [Train] Loss=1.2191 | Obj=0.1036
-  [Val]   Loss=2.1181
-  [Val:Regression] ObjMAE=0.0389 | ObjBrier=0.0138 | ObjECE=0.0332 | OffMAE=0.1930 | OffRMSE=0.2450 | ClsBrier=0.1012
-  -> [No improvement: 1/15]
-Epoch 11/50:
-  [Train] Loss=1.1612 | Obj=0.0979
-  [Val]   Loss=2.1353
-  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
-  -> [No improvement: 2/15]
-Epoch 12/50:
-  [Train] Loss=1.1345 | Obj=0.0962
-  [Val]   Loss=2.2897
-  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
-  -> [No improvement: 3/15]
-Epoch 13/50:
-  [Train] Loss=1.1781 | Obj=0.1022
-  [Val]   Loss=2.0969
+  [Train] Loss=2.4358 | Obj=0.3273
+  [Val]   Loss=4.0470
   [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
   -> [No improvement: 4/15]
-Epoch 14/50:
-  [Train] Loss=1.0815 | Obj=0.0896
-  [Val]   Loss=2.1622
-  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
+Epoch 10/50:
+  [Train] Loss=2.6294 | Obj=0.3599
+  [Val]   Loss=3.3463
+  [Val:Regression] ObjMAE=0.0619 | ObjBrier=0.0233 | ObjECE=0.0565 | OffMAE=0.2143 | OffRMSE=0.2562 | ClsBrier=0.0874
   -> [No improvement: 5/15]
-Epoch 15/50:
-  [Train] Loss=1.2686 | Obj=0.1124
-  [Val]   Loss=2.1984
-  [Val:Regression] ObjMAE=0.0301 | ObjBrier=0.0128 | ObjECE=0.0241 | OffMAE=0.1959 | OffRMSE=0.2522 | ClsBrier=0.1003
+Epoch 11/50:
+  [Train] Loss=2.3212 | Obj=0.3103
+  [Val]   Loss=3.7019
+  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
   -> [No improvement: 6/15]
-Epoch 16/50:
-  [Train] Loss=1.0486 | Obj=0.0855
-  [Val]   Loss=2.3591
+Epoch 12/50:
+  [Train] Loss=2.2509 | Obj=0.3016
+  [Val]   Loss=3.7316
   [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
   -> [No improvement: 7/15]
-Epoch 17/50:
-  [Train] Loss=0.9910 | Obj=0.0793
-  [Val]   Loss=2.4308
+Epoch 13/50:
+  [Train] Loss=2.1540 | Obj=0.2874
+  [Val]   Loss=4.0185
   [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
   -> [No improvement: 8/15]
-Epoch 18/50:
-  [Train] Loss=0.9562 | Obj=0.0745
-  [Val]   Loss=2.6185
+Epoch 14/50:
+  [Train] Loss=2.1294 | Obj=0.2855
+  [Val]   Loss=4.2338
   [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
   -> [No improvement: 9/15]
-Epoch 19/50:
-  [Train] Loss=0.9344 | Obj=0.0730
-  [Val]   Loss=2.5440
-  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
+Epoch 15/50:
+  [Train] Loss=2.0546 | Obj=0.2761
+  [Val]   Loss=4.1339
+  [Val:Regression] ObjMAE=0.0465 | ObjBrier=0.0206 | ObjECE=0.0409 | OffMAE=0.1952 | OffRMSE=0.2504 | ClsBrier=0.0497
   -> [No improvement: 10/15]
+Epoch 16/50:
+  [Train] Loss=2.0375 | Obj=0.2747
+  [Val]   Loss=4.3738
+  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
+  -> [No improvement: 11/15]
+Epoch 17/50:
+  [Train] Loss=1.9992 | Obj=0.2706
+  [Val]   Loss=4.6325
+  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
+  -> [No improvement: 12/15]
+Epoch 18/50:
+  [Train] Loss=1.9338 | Obj=0.2613
+  [Val]   Loss=4.9105
+  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
+  -> [No improvement: 13/15]
+Epoch 19/50:
+  [Train] Loss=1.8743 | Obj=0.2521
+  [Val]   Loss=5.2739
+  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
+  -> [No improvement: 14/15]
+Epoch 20/50:
+  [Train] Loss=1.8423 | Obj=0.2467
+  [Val]   Loss=5.4041
+  [Val:Regression] ObjMAE=0.0305 | ObjBrier=0.0135 | ObjECE=0.0249 | OffMAE=0.1773 | OffRMSE=0.2501 | ClsBrier=0.0275
+  -> [No improvement: 15/15]
+
+Early stopping triggered. Best Validation Loss: 3.3445.
+
+Training completed.
