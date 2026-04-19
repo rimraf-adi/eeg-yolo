@@ -1,0 +1,103 @@
+EEG Two-Stage Classification Benchmark
+Stage1: binary (none/event), Stage2: event subclass (!,!start,!end)
+===============================================================
+
+=== BINARY STAGE (1D) ===
+window=1.0s stride=1.0s fs=500 grid_S=20
+train=9544 val=9848 test=11007
+class_counts=[7158, 2386] class_weights=[0.5, 1.5]
+
+epoch=1 train_loss=0.6801 val_loss=0.6402 val_acc=0.9608 val_macro_f1=0.4900 val_weighted_f1=0.9416 val_rare_f1=0.4900
+epoch=2 train_loss=0.5998 val_loss=0.3990 val_acc=0.9608 val_macro_f1=0.4900 val_weighted_f1=0.9416 val_rare_f1=0.4900
+epoch=3 train_loss=0.5342 val_loss=0.7534 val_acc=0.5955 val_macro_f1=0.4235 val_weighted_f1=0.7137 val_rare_f1=0.4235
+epoch=4 train_loss=0.5044 val_loss=1.0074 val_acc=0.3818 val_macro_f1=0.3122 val_weighted_f1=0.5138 val_rare_f1=0.3122
+epoch=5 train_loss=0.4781 val_loss=0.8671 val_acc=0.5487 val_macro_f1=0.4038 val_weighted_f1=0.6747 val_rare_f1=0.4038
+epoch=6 train_loss=0.4491 val_loss=0.9767 val_acc=0.5196 val_macro_f1=0.3869 val_weighted_f1=0.6498 val_rare_f1=0.3869
+
+--- TEST BINARY METRICS (1D) ---
+Loss: 0.6331
+Accuracy: 0.9791
+Macro F1: 0.4947
+Weighted F1: 0.9688
+Class none: P=0.9791 R=1.0000 F1=0.9894 support=10777
+Class event: P=0.0000 R=0.0000 F1=0.0000 support=230
+
+=== EVENT STAGE (1D) ===
+window=1.0s stride=1.0s fs=500 grid_S=20
+train=2386 val=386 test=230
+class_counts=[2165, 112, 109] class_weights=[0.07464034110307693, 1.4428244829177856, 1.4825352430343628]
+
+epoch=1 train_loss=0.3746 val_loss=0.1299 val_acc=0.0777 val_macro_f1=0.0481 val_weighted_f1=0.0112 val_rare_f1=0.0721
+    val_class_f1: !=0.0000 !start=0.1442 !end=0.0000
+epoch=2 train_loss=0.2434 val_loss=0.1400 val_acc=0.0777 val_macro_f1=0.0481 val_weighted_f1=0.0112 val_rare_f1=0.0721
+    val_class_f1: !=0.0000 !start=0.1442 !end=0.0000
+epoch=3 train_loss=0.1586 val_loss=0.1558 val_acc=0.0777 val_macro_f1=0.0481 val_weighted_f1=0.0112 val_rare_f1=0.0721
+    val_class_f1: !=0.0000 !start=0.1442 !end=0.0000
+epoch=4 train_loss=0.1223 val_loss=0.1633 val_acc=0.0777 val_macro_f1=0.0481 val_weighted_f1=0.0112 val_rare_f1=0.0721
+    val_class_f1: !=0.0000 !start=0.1442 !end=0.0000
+epoch=5 train_loss=0.1365 val_loss=0.1627 val_acc=0.0777 val_macro_f1=0.0481 val_weighted_f1=0.0112 val_rare_f1=0.0721
+    val_class_f1: !=0.0000 !start=0.0000 !end=0.1442
+epoch=6 train_loss=0.1148 val_loss=0.2303 val_acc=0.0777 val_macro_f1=0.0481 val_weighted_f1=0.0112 val_rare_f1=0.0721
+    val_class_f1: !=0.0000 !start=0.0000 !end=0.1442
+
+--- TEST EVENT METRICS (1D) ---
+Loss: 0.0845
+Accuracy: 0.0261
+Macro F1: 0.0169
+Weighted F1: 0.0013
+Class !: P=0.0000 R=0.0000 F1=0.0000 support=219
+Class !start: P=0.0261 R=1.0000 F1=0.0508 support=6
+Class !end: P=0.0000 R=0.0000 F1=0.0000 support=5
+
+=== BINARY STAGE (2D) ===
+window=1.0s stride=1.0s fs=500 grid_S=20
+train=9544 val=9848 test=11007
+class_counts=[7158, 2386] class_weights=[0.5, 1.5]
+
+epoch=1 train_loss=0.5724 val_loss=0.6267 val_acc=0.7109 val_macro_f1=0.4794 val_weighted_f1=0.7993 val_rare_f1=0.4794
+epoch=2 train_loss=0.4812 val_loss=1.2538 val_acc=0.3484 val_macro_f1=0.2913 val_weighted_f1=0.4767 val_rare_f1=0.2913
+epoch=3 train_loss=0.4547 val_loss=0.9421 val_acc=0.4810 val_macro_f1=0.3684 val_weighted_f1=0.6142 val_rare_f1=0.3684
+epoch=4 train_loss=0.4339 val_loss=0.7533 val_acc=0.6234 val_macro_f1=0.4410 val_weighted_f1=0.7353 val_rare_f1=0.4410
+epoch=5 train_loss=0.4051 val_loss=0.6758 val_acc=0.6864 val_macro_f1=0.4756 val_weighted_f1=0.7820 val_rare_f1=0.4756
+epoch=6 train_loss=0.3940 val_loss=0.7705 val_acc=0.5748 val_macro_f1=0.4176 val_weighted_f1=0.6965 val_rare_f1=0.4176
+
+--- TEST BINARY METRICS (2D) ---
+Loss: 0.5726
+Accuracy: 0.7699
+Macro F1: 0.4597
+Weighted F1: 0.8520
+Class none: P=0.9810 R=0.7801 F1=0.8691 support=10777
+Class event: P=0.0275 R=0.2913 F1=0.0502 support=230
+
+=== EVENT STAGE (2D) ===
+window=1.0s stride=1.0s fs=500 grid_S=20
+train=2386 val=386 test=230
+class_counts=[2165, 112, 109] class_weights=[0.07464034110307693, 1.4428244829177856, 1.4825352430343628]
+
+epoch=1 train_loss=0.3270 val_loss=0.1513 val_acc=0.0777 val_macro_f1=0.0481 val_weighted_f1=0.0112 val_rare_f1=0.0721
+    val_class_f1: !=0.0000 !start=0.0000 !end=0.1442
+epoch=2 train_loss=0.1925 val_loss=0.1782 val_acc=0.0777 val_macro_f1=0.0481 val_weighted_f1=0.0112 val_rare_f1=0.0721
+    val_class_f1: !=0.0000 !start=0.0000 !end=0.1442
+epoch=3 train_loss=0.1379 val_loss=0.2227 val_acc=0.0777 val_macro_f1=0.0481 val_weighted_f1=0.0112 val_rare_f1=0.0721
+    val_class_f1: !=0.0000 !start=0.0000 !end=0.1442
+epoch=4 train_loss=0.0884 val_loss=0.2732 val_acc=0.0777 val_macro_f1=0.0481 val_weighted_f1=0.0112 val_rare_f1=0.0721
+    val_class_f1: !=0.0000 !start=0.0000 !end=0.1442
+epoch=5 train_loss=0.0710 val_loss=0.3079 val_acc=0.0777 val_macro_f1=0.0481 val_weighted_f1=0.0112 val_rare_f1=0.0721
+    val_class_f1: !=0.0000 !start=0.0000 !end=0.1442
+epoch=6 train_loss=0.0546 val_loss=0.3205 val_acc=0.0777 val_macro_f1=0.0481 val_weighted_f1=0.0112 val_rare_f1=0.0721
+    val_class_f1: !=0.0000 !start=0.0000 !end=0.1442
+
+--- TEST EVENT METRICS (2D) ---
+Loss: 0.0771
+Accuracy: 0.0217
+Macro F1: 0.0142
+Weighted F1: 0.0009
+Class !: P=0.0000 R=0.0000 F1=0.0000 support=219
+Class !start: P=0.0000 R=0.0000 F1=0.0000 support=6
+Class !end: P=0.0217 R=1.0000 F1=0.0426 support=5
+
+=== FINAL TWO-STAGE SUMMARY ===
+1D Stage1(binary): Acc=0.9791 MacroF1=0.4947
+1D Stage2(event):  Acc=0.0261 MacroF1=0.0169
+2D Stage1(binary): Acc=0.7699 MacroF1=0.4597
+2D Stage2(event):  Acc=0.0217 MacroF1=0.0142

@@ -1,0 +1,104 @@
+EEG Seizure 2D Multi-Channel YOLO Regression Training
+Total Patients Analyzed: 82
+Train PIDs: [58, 16, 50, 53, 33, 13, 54, 9, 64, 31, 78, 51, 37, 71, 24, 66, 57, 44, 60, 34, 2, 79, 56, 40, 19, 69, 20, 21, 59, 63, 47, 62, 41, 8, 67, 3, 17, 39, 23, 43, 25, 6, 7, 48, 75, 10, 72, 22, 68, 61, 11, 49, 1, 52, 76, 38, 77]
+Val PIDs: [81, 27, 35, 45, 42, 46, 26, 74, 65, 30, 28, 73]
+Test PIDs: [80, 5, 55, 12, 70, 14, 18, 29, 32, 36, 4, 15, 82]
+--------------------------------------------------
+
+Train Windows: 15877, Val Windows: 3935, Test Windows: 4398
+
+Epoch 1/50:
+  [Train] Loss=2.2158 | Obj=0.2330
+  [Val]   Loss=2.0748
+  [Val:Regression] ObjMAE=0.0695 | ObjBrier=0.0163 | ObjECE=0.0621 | OffMAE=0.2150 | OffRMSE=0.2551 | ClsBrier=0.1151
+  -> BEST! Saved weights to best_model.pt
+Epoch 2/50:
+  [Train] Loss=1.7719 | Obj=0.1693
+  [Val]   Loss=2.1561
+  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
+  -> [No improvement: 1/15]
+Epoch 3/50:
+  [Train] Loss=1.6876 | Obj=0.1568
+  [Val]   Loss=2.3535
+  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
+  -> [No improvement: 2/15]
+Epoch 4/50:
+  [Train] Loss=1.6122 | Obj=0.1453
+  [Val]   Loss=2.1124
+  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
+  -> [No improvement: 3/15]
+Epoch 5/50:
+  [Train] Loss=1.5082 | Obj=0.1329
+  [Val]   Loss=2.0076
+  [Val:Regression] ObjMAE=0.0537 | ObjBrier=0.0188 | ObjECE=0.0478 | OffMAE=0.1924 | OffRMSE=0.2457 | ClsBrier=0.0953
+  -> BEST! Saved weights to best_model.pt
+Epoch 6/50:
+  [Train] Loss=1.4981 | Obj=0.1323
+  [Val]   Loss=2.1032
+  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
+  -> [No improvement: 1/15]
+Epoch 7/50:
+  [Train] Loss=1.3675 | Obj=0.1177
+  [Val]   Loss=2.0626
+  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
+  -> [No improvement: 2/15]
+Epoch 8/50:
+  [Train] Loss=1.3244 | Obj=0.1135
+  [Val]   Loss=2.0323
+  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
+  -> [No improvement: 3/15]
+Epoch 9/50:
+  [Train] Loss=1.2705 | Obj=0.1086
+  [Val]   Loss=1.9343
+  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
+  -> BEST! Saved weights to best_model.pt
+Epoch 10/50:
+  [Train] Loss=1.2191 | Obj=0.1036
+  [Val]   Loss=2.1181
+  [Val:Regression] ObjMAE=0.0389 | ObjBrier=0.0138 | ObjECE=0.0332 | OffMAE=0.1930 | OffRMSE=0.2450 | ClsBrier=0.1012
+  -> [No improvement: 1/15]
+Epoch 11/50:
+  [Train] Loss=1.1612 | Obj=0.0979
+  [Val]   Loss=2.1353
+  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
+  -> [No improvement: 2/15]
+Epoch 12/50:
+  [Train] Loss=1.1345 | Obj=0.0962
+  [Val]   Loss=2.2897
+  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
+  -> [No improvement: 3/15]
+Epoch 13/50:
+  [Train] Loss=1.1781 | Obj=0.1022
+  [Val]   Loss=2.0969
+  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
+  -> [No improvement: 4/15]
+Epoch 14/50:
+  [Train] Loss=1.0815 | Obj=0.0896
+  [Val]   Loss=2.1622
+  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
+  -> [No improvement: 5/15]
+Epoch 15/50:
+  [Train] Loss=1.2686 | Obj=0.1124
+  [Val]   Loss=2.1984
+  [Val:Regression] ObjMAE=0.0301 | ObjBrier=0.0128 | ObjECE=0.0241 | OffMAE=0.1959 | OffRMSE=0.2522 | ClsBrier=0.1003
+  -> [No improvement: 6/15]
+Epoch 16/50:
+  [Train] Loss=1.0486 | Obj=0.0855
+  [Val]   Loss=2.3591
+  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
+  -> [No improvement: 7/15]
+Epoch 17/50:
+  [Train] Loss=0.9910 | Obj=0.0793
+  [Val]   Loss=2.4308
+  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
+  -> [No improvement: 8/15]
+Epoch 18/50:
+  [Train] Loss=0.9562 | Obj=0.0745
+  [Val]   Loss=2.6185
+  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
+  -> [No improvement: 9/15]
+Epoch 19/50:
+  [Train] Loss=0.9344 | Obj=0.0730
+  [Val]   Loss=2.5440
+  [Val:Temporal] Skipped (runs every 5 epoch(s), plus first/last epoch).
+  -> [No improvement: 10/15]
